@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="tr" class="dark">
 <head>
-<script src="./offline-paket.js?v=20261008-sync2"></script>
-<script src="./offline-sync.js?v=20261008-sync2"></script>
+<script src="./offline-paket.js?v=20261008-fix3"></script>
+<script src="./offline-sync.js?v=20261008-fix3"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>KOLART — Çevrimdışı Devriye</title>
@@ -348,6 +348,13 @@ const decryptData = (encrypted) => {
 const offlinePackage = await window.KolartOffline.last();
 if (!offlinePackage) {
     document.body.innerHTML = '<div style="padding:40px 24px;color:#fff;background:#080808;min-height:100vh;font-family:Arial;text-align:center"><h2>Çevrimdışı paket bulunamadı</h2><p>İnternet bağlantısıyla giriş yapıp paketin tamamlanmasını bekleyin.</p><a href="index.html" style="color:#7cc7ff">Giriş ekranına dön</a></div>';
+    const status = await window.KolartOffline.status();
+    const note = document.createElement('p');
+    note.style.cssText = 'font-size:14px;color:#ccc;overflow-wrap:anywhere';
+    note.textContent = status?.state === 'error' ? 'Hazırlık tamamlanamadı: ' + status.message :
+        status?.state === 'preparing' ? 'İlk indirme henüz tamamlanmadı. İnternet bağlantısıyla yeniden giriş yapın.' :
+        'Bu cihazda tamamlanmış paket kaydı yok. İnternet bağlantısıyla giriş yapın.';
+    document.body.firstElementChild.appendChild(note);
     throw new Error('Bu telefonda hazır çevrimdışı paket yok');
 }
 const currentUser = offlinePackage.user;
