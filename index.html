@@ -2,8 +2,11 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<script src="./offline-sync.js?v=20261008-2135-v6"></script>
-<script src="./offline-paket.js?v=20261008-2135-v6"></script>
+<script>
+  if (!navigator.onLine) location.replace(new URL('offline-devriye.html', location.href));
+</script>
+<script src="./offline-sync.js?v=20261008-2050"></script>
+<script src="./offline-paket.js?v=20261008-2050"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
@@ -633,8 +636,6 @@ input, textarea {
     </button>
 </div>
 
-<button id="offlineModeBtn" onclick="location.href='offline-devriye.html'" style="position:fixed;right:14px;top:14px;z-index:1000000;border:1px solid rgba(255,255,255,.22);background:rgba(8,18,30,.88);color:#fff;padding:10px 13px;border-radius:13px;font-weight:800;font-size:12px;letter-spacing:.4px;backdrop-filter:blur(12px);cursor:pointer;box-shadow:0 8px 25px rgba(0,0,0,.25);">OFFLINE MOD</button>
-
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 
@@ -652,70 +653,12 @@ async function finishOfflineUploads(app, db, auth, siteID) {
     const done = await window.KolartOfflineSync.sync(offlineUploadContext(app,db,auth,siteID));
     return done;
 }
-// ============================================================
-// KOLART OFFLINE SÜRÜM YÖNETİMİ
-// Firebase'deki offlineversiyon değeri MERKEZDEN yönetilir.
-// Cihaz bu değeri ASLA Firebase'e geri yazmaz.
-// Örnek: v1 -> v2 yaptığında, cihazdaki v1 paket otomatik yenilenir.
-// ============================================================
-const OFFLINE_VERSION_ROOT = 'offlineversiyon';
-
-function offlineVersionKey(siteID, username) {
-    return `${String(siteID || '').trim()}__${String(username || '').trim().toLocaleUpperCase('tr-TR')}`;
-}
-
-async function getRemoteOfflineVersion(db, siteID, username) {
-    // Öncelik: site + kullanıcıya özel sürüm.
-    const key = offlineVersionKey(siteID, username);
-    try {
-        const exact = await get(child(ref(db), `${OFFLINE_VERSION_ROOT}/${key}`));
-        if (exact.exists() && (typeof exact.val() === 'string' || typeof exact.val() === 'number')) return String(exact.val()).trim();
-    } catch (_) {}
-    // Eski kurulumlarla uyumluluk: /offlineversiyon/{siteID}
-    try {
-        const site = await get(child(ref(db), `${OFFLINE_VERSION_ROOT}/${siteID}`));
-        if (site.exists() && (typeof site.val() === 'string' || typeof site.val() === 'number')) return String(site.val()).trim();
-    } catch (_) {}
-    // Tek sürümlü eski kurulum: /offlineversiyon = "v1"
-    try {
-        const root = await get(child(ref(db), OFFLINE_VERSION_ROOT));
-        if (root.exists() && (typeof root.val() === 'string' || typeof root.val() === 'number')) return String(root.val()).trim();
-    } catch (_) {}
-    return null;
-}
-
+// Paket yalnız doğrulanmış güvenlik girişinden sonra hazırlanır.
 async function preparePatrolBundle(app, db, auth, siteID, username, type, password) {
     if (type !== 'security') return true;
-    if (!siteID || !username) return false;
-
-    const remoteVersion = await getRemoteOfflineVersion(db, siteID, username);
-    if (!remoteVersion) {
-        console.error('[KOLART] Firebase offlineversiyon bulunamadı.');
-        return false;
-    }
-
-    // IndexedDB'deki mevcut paketi yükle; böylece aynı sürümde tekrar indirme yapılmaz.
-    const existing = await window.KolartOffline.load(siteID, username);
-    const localVersion = existing ? window.KolartOffline.getLocalVersion() : '';
-    console.log('[KOLART] Offline sürüm:', {localVersion, remoteVersion});
-
-    // Aynı sürüm ve sağlam paket varsa hiçbir şey indirme.
-    if (localVersion === remoteVersion && existing && await window.KolartOffline.intact(existing)) {
-        console.log('[KOLART] Paket güncel:', remoteVersion);
-        return true;
-    }
-
-    // Yeni sürüm geldi veya cihazda paket yok/bozuk.
-    console.log('[KOLART] Yeni offline paket hazırlanıyor:', localVersion || '(yok)', '=>', remoteVersion);
+    // Önce bekleyen kayıtları onaylat: yeni paket az önce yüklenen saatleri de içerir.
     if (!await finishOfflineUploads(app, db, auth, siteID)) return false;
-
-    const result = await window.KolartOffline.start({
-        app, db, auth, siteID, username, password, get, ref,
-        offlineVersion: remoteVersion
-    });
-
-    // start() yalnızca paket tamamen kaydedilip doğrulanırsa sonuç döndürür.
-    return !!result;
+    return !!await window.KolartOffline.start({app,db,auth,siteID,username,password,get,ref});
 }
 // --- GÜVENLİK ANAHTARI ---
 const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
@@ -1207,12 +1150,15 @@ document.addEventListener('click', (e) => {
   }
 });
 
-window.addEventListener('online', () => {
-    const modal = document.getElementById('noInternetModal');
-    if (modal) modal.style.display = 'none';
+window.addEventListener('offline', () => {
+    location.replace(new URL('offline-devriye.html',location.href));
 });
-// Ana giriş ekranı internet olsa da olmasa da index.html olarak kalır.
-// Çevrimdışı kullanım için sağ üstteki OFFLINE MOD düğmesi kullanılır.
+window.addEventListener('online', () => {
+    document.getElementById('noInternetModal').style.display = 'none';
+});
+if (!navigator.onLine) {
+    location.replace(new URL('offline-devriye.html',location.href));
+}
 
 let deferredPrompt;
 const installBtn = document.getElementById('installBtn');
