@@ -61,7 +61,7 @@ async function ensureVersion(job, missing, cache) {
   throw new Error('Sürüm çakışması; sonraki internetli girişte tekrar denenecek');
 }
 async function intact(p) {
-  if (!p?.complete || p.schema !== 1 || !await caches.has(p.assetCache)) return false;
+  if (!p?.complete || p.schema !== 2 || !await caches.has(p.assetCache)) return false;
   const cache = await caches.open(p.assetCache);
   for (const url of p.requiredAssets || []) if (!await cache.match(url)) return false;
   return (p.requiredAssets || []).length > 0;
@@ -97,7 +97,7 @@ async function assets(cacheName) {
       for (let i=0; i<children.length; i+=4) await Promise.all(children.slice(i,i+4).map(([u,m]) => visit(u,m)));
     } catch (e) { if (mandatory) throw new Error('Paket dosyası indirilemedi: ' + url + ' (' + e.message + ')'); }
   };
-  await Promise.all(['index.html','devriye.html','offline-paket.js'].map(p => visit(new URL(p,BASE).href)));
+  await Promise.all(['index.html','devriye.html','offline-devriye.html','offline-paket.js','offline-sync.js'].map(p => visit(new URL(p,BASE).href)));
   return required;
 }
 function shiftKey() {
@@ -146,7 +146,7 @@ async function prepare(job) {
       const [data,requiredAssets] = await Promise.all([dataFor(job,profile),assets(cacheName)]);
       const latest = version((await read(job,'offlineversiyon/' + job.username)).value);
       if (latest !== target) { await caches.delete(cacheName); target = latest || await ensureVersion(job,false,meta); continue; }
-      const payload = {schema:1,complete:true,siteID:job.siteID,username:job.username,uid:job.uid,version:target,
+      const payload = {schema:2,complete:true,siteID:job.siteID,username:job.username,uid:job.uid,version:target,
         assetCache:cacheName,requiredAssets,createdAt:Date.now(),...data};
       // Bayrak en son: yarım paket tamamlanmış kabul edilmez. Eski paket başarılı değişime kadar kalır.
       await meta.put(key,json(payload));
@@ -189,13 +189,21 @@ self.addEventListener('fetch', e => {
   if (/\.(firebaseio\.com|firebasedatabase\.app)$/.test(url.hostname) || /identitytoolkit|securetoken/.test(url.hostname)) return;
   if (e.request.mode === 'navigate' && url.origin === BASE.origin && url.pathname.startsWith(BASE.pathname)) {
     e.respondWith((async () => {
-      try { return await fetch(e.request); }
-      catch (_) {
+      const offlineURL = new URL('offline-devriye.html',BASE).href;
+      if (url.pathname === new URL(offlineURL).pathname) {
         const packages = await packageList();
-        const isEntry = [BASE.pathname,BASE.pathname+'index.html',BASE.pathname+'guvenlik.html'].includes(url.pathname);
-        // Offline PWA açılışında normal Auth giriş ekranı yerine hazırlanan devriye çalışır.
-        const hit = isEntry ? await cached(new URL('devriye.html',BASE).href,packages) : await cached(e.request,packages);
-        return hit || new Response('Bu cihazda çevrimdışı paket yok. İnternet bağlantısıyla bir kez giriş yapın.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}});
+        const hit = await cached(offlineURL,packages);
+        if (hit) return hit;
+        try {return await fetchTimed(e.request,{cache:'no-store'});}catch (_) {}
+        return new Response('Hazır çevrimdışı paket yok. İnternetle giriş yapın.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}});
+      }
+      const entry = [BASE.pathname,BASE.pathname+'index.html',BASE.pathname+'guvenlik.html',BASE.pathname+'devriye.html'].includes(url.pathname);
+      if (entry && self.navigator?.onLine === false) return Response.redirect(offlineURL,302);
+      try { return await fetchTimed(e.request,{cache:'no-store'}); }
+      catch (_) {
+        if (entry) return Response.redirect(offlineURL,302);
+        const hit = await cached(e.request,await packageList());
+        return hit || new Response('Bu sayfa çevrimdışı pakette bulunmuyor. İnternet bağlantısıyla giriş yapın.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}});
       }
     })()); return;
   }
