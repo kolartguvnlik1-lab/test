@@ -2,12 +2,17 @@
 'use strict';
 const BASE = new URL('./', self.location.href);
 const META = 'kolart-offline-meta-1';
+const SHELL = 'kolart-offline-shell-20261008-fix3';
 const jobs = new Map();
 let packagesMemo = null;
 const urlFor = (s,u) => new URL(`__kolart_paket/${encodeURIComponent(s)}/${encodeURIComponent(u)}`, BASE).href;
 const receiptFor = (s,u) => new URL(`__kolart_yenileme/${encodeURIComponent(s)}/${encodeURIComponent(u)}`, BASE).href;
 const json = v => new Response(JSON.stringify(v), {headers:{'Content-Type':'application/json; charset=utf-8'}});
-self.addEventListener('install', e => e.waitUntil(self.skipWaiting()));
+self.addEventListener('install', e => e.waitUntil((async () => {
+  // Sayfa ve QR kitaplıkları, Firebase veri paketinden bağımsız hazırlanır.
+  await assets(SHELL);
+  await self.skipWaiting();
+})()));
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 async function broadcast(data) {
   for (const client of await self.clients.matchAll({includeUncontrolled:true, type:'window'})) client.postMessage(data);
@@ -61,7 +66,7 @@ async function ensureVersion(job, missing, cache) {
   throw new Error('Sürüm çakışması; sonraki internetli girişte tekrar denenecek');
 }
 async function intact(p) {
-  if (!p?.complete || p.schema !== 2 || !await caches.has(p.assetCache)) return false;
+  if (!p?.complete || p.schema !== 3 || !await caches.has(p.assetCache)) return false;
   const cache = await caches.open(p.assetCache);
   for (const url of p.requiredAssets || []) if (!await cache.match(url)) return false;
   return (p.requiredAssets || []).length > 0;
@@ -97,7 +102,7 @@ async function assets(cacheName) {
       for (let i=0; i<children.length; i+=4) await Promise.all(children.slice(i,i+4).map(([u,m]) => visit(u,m)));
     } catch (e) { if (mandatory) throw new Error('Paket dosyası indirilemedi: ' + url + ' (' + e.message + ')'); }
   };
-  await Promise.all(['index.html','devriye.html','offline-devriye.html','offline-paket.js','offline-sync.js'].map(p => visit(new URL(p,BASE).href)));
+  await Promise.all(['offline-devriye.html','offline-paket.js','offline-sync.js','offline-durum.html'].map(p => visit(new URL(p,BASE).href)));
   return required;
 }
 function shiftKey() {
@@ -113,19 +118,19 @@ async function validateUser(job) {
 async function dataFor(job, profile) {
   const dataCapturedAt = Date.now();
   const user = {username:job.username,name:profile.name || job.username,type:profile.type,uid:job.uid,isActive:profile.isActive !== false};
-  const paths = ['settings/siteName','settings/allowPointChange','telefon/' + job.username,
-    'nobetRecords','activeDevriye/' + job.username,'noktaListe','sistemAyarlari/saatModu',
+  const paths = ['telefon/' + job.username,
+    'nobetRecords','activeDevriye/' + job.username,'sistemAyarlari/saatModu',
     'sistemAyarlari/pazarSaatleri','sistemAyarlari/planliSaatler','sistemAyarlari/dakikaToleransi',
     'tamamlananDevriyeSaatleri/' + shiftKey()];
   const pairs = await Promise.all(paths.map(async p => [p,(await read(job,p)).value]));
   const data = Object.fromEntries(pairs);
+  // Offline ekranda bölge değiştirme kapalı; bu ekranın kullanmadığı yönetici düğümlerini okumayız.
+  data['settings/allowPointChange'] = false;
   data['users/' + job.username] = user;
   data.nobetRecords = Object.fromEntries(Object.entries(data.nobetRecords || {}).filter(([,r]) => r.startBy === user.name || r.startBy === user.username));
   const active = Object.values(data.nobetRecords).find(r => r.status === 'started');
   const block = (active?.startPoint || 'BÖLGE').trim();
-  const blocks = new Set([block,'BÖLGE', ...Object.entries(data.noktaListe || {}).filter(([,v])=>v===true).map(([k])=>k)]);
-  const qr = await Promise.all([...blocks].map(async b => [b + 'qrcodes',(await read(job,b + 'qrcodes')).value]));
-  Object.assign(data,Object.fromEntries(qr));
+  data[block + 'qrcodes'] = (await read(job,block + 'qrcodes')).value;
   if (!data[block + 'qrcodes'] || !Object.keys(data[block + 'qrcodes']).length) throw new Error('Aktif bölgede QR noktası bulunamadı');
   return {user,block,data,dataCapturedAt};
 }
@@ -136,20 +141,26 @@ async function prepare(job) {
   const previousResponse = await meta.match(key), previous = previousResponse ? await previousResponse.json() : null;
   const valid = await intact(previous) && previous.uid === job.uid;
   const profile = await validateUser(job);
-  let target = await ensureVersion(job,!valid,meta);
+  let target = valid ? await ensureVersion(job,false,meta) : null;
   if (valid && previous.uid === job.uid && previous.version === target) {
     await broadcast({type:'KOLART_PACKAGE_READY',siteID:job.siteID,username:job.username,version:target}); return;
   }
   for (let attempt=0;attempt<3;attempt++) {
     const cacheName = 'kolart-paket-' + job.siteID + '-' + job.uid + '-' + target + '-' + Date.now();
     try {
-      const [data,requiredAssets] = await Promise.all([dataFor(job,profile),assets(cacheName)]);
+      const results = await Promise.allSettled([dataFor(job,profile),assets(cacheName)]);
+      const failed = results.find(r => r.status === 'rejected');
+      if (failed) throw failed.reason;
+      const [data,requiredAssets] = results.map(r => r.value);
+      // İlk V1 / eksik cihaz onarımı: sürümü ancak gerekli dosyalar ve veri indikten sonra yaz.
+      if (target === null) target = await ensureVersion(job,!valid,meta);
       const latest = version((await read(job,'offlineversiyon/' + job.username)).value);
       if (latest !== target) { await caches.delete(cacheName); target = latest || await ensureVersion(job,false,meta); continue; }
-      const payload = {schema:2,complete:true,siteID:job.siteID,username:job.username,uid:job.uid,version:target,
+      const payload = {schema:3,complete:true,siteID:job.siteID,username:job.username,uid:job.uid,version:target,
         assetCache:cacheName,requiredAssets,createdAt:Date.now(),...data};
       // Bayrak en son: yarım paket tamamlanmış kabul edilmez. Eski paket başarılı değişime kadar kalır.
       await meta.put(key,json(payload));
+      await meta.put(new URL('__kolart_paket_durumu',BASE).href,json({state:'ready',siteID:job.siteID,username:job.username,version:target,at:Date.now()}));
       packagesMemo = null;
       await meta.delete(receiptFor(job.siteID,job.username));
       if (previous?.assetCache && previous.assetCache !== cacheName) await caches.delete(previous.assetCache);
@@ -163,7 +174,20 @@ self.addEventListener('message', e => {
   if (job?.type !== 'KOLART_PREPARE') return;
   const key = job.siteID + '/' + job.username;
   if (jobs.has(key)) return;
-  const work = prepare(job).catch(error => broadcast({type:'KOLART_PACKAGE_ERROR',message:error.message}))
+  const work = (async () => {
+    const meta = await caches.open(META);
+    await meta.put(new URL('__kolart_paket_durumu',BASE).href,json({state:'preparing',siteID:job.siteID,username:job.username,at:Date.now()}));
+    try {
+      await prepare(job);
+      const response = await meta.match(urlFor(job.siteID,job.username));
+      const ready = response ? await response.json() : null;
+      if (ready?.complete) await meta.put(new URL('__kolart_paket_durumu',BASE).href,json({state:'ready',siteID:job.siteID,username:job.username,version:ready.version,at:Date.now()}));
+    }
+    catch (error) {
+      await meta.put(new URL('__kolart_paket_durumu',BASE).href,json({state:'error',siteID:job.siteID,username:job.username,message:error.message,at:Date.now()}));
+      await broadcast({type:'KOLART_PACKAGE_ERROR',siteID:job.siteID,username:job.username,message:error.message});
+    }
+  })()
     .finally(() => jobs.delete(key));
   jobs.set(key,work); e.waitUntil(work);
 });
@@ -194,8 +218,10 @@ self.addEventListener('fetch', e => {
         const packages = await packageList();
         const hit = await cached(offlineURL,packages);
         if (hit) return hit;
+        const shellHit = await (await caches.open(SHELL)).match(offlineURL);
+        if (shellHit) return shellHit;
         try {return await fetchTimed(e.request,{cache:'no-store'});}catch (_) {}
-        return new Response('Hazır çevrimdışı paket yok. İnternetle giriş yapın.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}});
+        return new Response('<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#080808;color:white;font:16px Arial;padding:40px 24px;text-align:center"><h2>Çevrimdışı hazırlık tamamlanamadı</h2><p>Bu cihazda sayfa dosyaları eksik. İnternet bağlantısıyla giriş yapıp tekrar deneyin.</p><a style="color:#7cc7ff" href="index.html">Giriş ekranına dön</a></body></html>',{status:503,headers:{'Content-Type':'text/html; charset=utf-8'}});
       }
       const entry = [BASE.pathname,BASE.pathname+'index.html',BASE.pathname+'guvenlik.html',BASE.pathname+'devriye.html'].includes(url.pathname);
       if (entry && self.navigator?.onLine === false) return Response.redirect(offlineURL,302);
@@ -210,6 +236,7 @@ self.addEventListener('fetch', e => {
   // Firebase JSON istekleri cache'e alınmaz. Yalnız paket listesinde yer alan statik kaynaklar kullanılır.
   e.respondWith((async () => {
     const hit = await cached(e.request,await packageList());
-    return hit || fetch(e.request);
+    const shellHit = await (await caches.open(SHELL)).match(e.request);
+    return hit || shellHit || fetch(e.request);
   })());
 });
