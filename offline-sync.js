@@ -281,12 +281,4 @@
     } catch(_){return false;}finally{clearTimeout(timer);}
   }
   window.KolartOfflineSync={BUILD,open,list,active,saveActive,enqueue,sync,attach,isOnline,packages,putPackage};
-  // HTTP önbelleğinden eski index dönse bile internet yokken Auth ekranında kalma.
-  function routeOfflineEntry() {
-    const page=location.pathname.split('/').pop();
-    if(!navigator.onLine && (!page || page==='index.html'))location.replace(new URL('offline-devriye.html',location.href));
-  }
-  routeOfflineEntry();
-  window.addEventListener('offline',routeOfflineEntry);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)routeOfflineEntry();});
 })();
