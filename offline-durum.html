@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Çevrimdışı hazırlık</title><style>body{margin:0;background:#090e18;color:#ecf4ff;font:16px system-ui;min-height:100vh;display:grid;place-items:center}main{margin:24px;padding:28px;max-width:420px;border:1px solid #263953;border-radius:24px;background:#101b2c}h1{font-size:24px}p{line-height:1.6;overflow-wrap:anywhere}a{color:#87c8ff}#badge{color:#6ae8ad;font-weight:700}</style>
+<main><h1>Çevrimdışı hazırlık</h1><p id="badge">Kontrol ediliyor…</p><p id="detail"></p><a href="index.html">Giriş ekranına dön</a></main>
+<script>
+(async()=>{
+const base=new URL('./',location.href),badge=document.getElementById('badge'),detail=document.getElementById('detail');
+async function check(){try{
+ const site=localStorage.getItem('siteID'),pointer=JSON.parse(localStorage.getItem('kolart_offline_son_kullanici')||'null');
+ const meta=await caches.open('kolart-offline-meta-1');let ready=false,p;
+ if(pointer?.siteID===site){const r=await meta.match(new URL('__kolart_paket/'+encodeURIComponent(site)+'/'+encodeURIComponent(pointer.username),base).href);p=r?await r.json():null;
+ if(p?.complete&&p.schema===3&&await caches.has(p.assetCache)){const assets=await caches.open(p.assetCache);ready=true;for(const u of p.requiredAssets||[])if(!await assets.match(u)){ready=false;break;}if(!p.requiredAssets?.length)ready=false;}}
+ if(ready){badge.textContent='Hazır · '+p.version;detail.textContent='Bu cihazın devriye paketi tamamlandı. İnterneti kapatıp PWA’yı açabilirsiniz.';return;}
+ const r=await meta.match(new URL('__kolart_paket_durumu',base).href),status=r?await r.json():null;
+ const own=status?.siteID===site;
+ badge.textContent=own&&status.state==='error'?'Hazırlık tamamlanamadı':'Paket henüz hazır değil';
+ detail.textContent=own&&status.state==='error'?status.message:own&&status.state==='preparing'?'Dosyalar ve devriye bilgileri indiriliyor. İlk hazırlık tamamlanana kadar interneti açık tutun.':'İnternet bağlantısıyla giriş yapın. Firebase’de V1 görünmesi tek başına bu cihazın hazır olduğunu göstermez.';
+ }catch(e){badge.textContent='Cihaz kaydı okunamadı';detail.textContent=e.message;}}
+await check();setInterval(check,1500);
+})();
+</script></html>
