@@ -1,20 +1,22 @@
 /* KOLART: kalıcı çevrimdışı kuyruk ve index ekranında onaylı gönderim. */
 (() => {
   'use strict';
-  const BUILD = '20261008-sync2';
+  const BUILD = '20261008-2050';
   const databaseName = 'kolart-offline-kayitlar-2';
   let opened, saving = Promise.resolve(), indexContext, pendingSync, pendingKey;
   const clone = v => structuredClone(v);
   function open() {
     if (!opened) opened = new Promise((resolve,reject) => {
-      const request = indexedDB.open(databaseName,1);
+      const request = indexedDB.open(databaseName,2);
       request.onupgradeneeded = () => {
         const db = request.result;
-        db.createObjectStore('reports',{keyPath:'id'});
-        db.createObjectStore('active',{keyPath:'id'});
-        db.createObjectStore('leases',{keyPath:'id'});
+        for (const name of ['reports','active','leases','packages'])
+          if (!db.objectStoreNames.contains(name)) db.createObjectStore(name,{keyPath:'id'});
       };
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        request.result.onversionchange = () => {request.result.close();opened=null;};
+        resolve(request.result);
+      };
       request.onerror = () => { opened = null; reject(request.error); };
       request.onblocked = () => reject(new Error('Telefon kayıt deposu başka bir sekmede güncelleniyor'));
     });
@@ -25,7 +27,8 @@
   async function transaction(stores,mode,fn) {
     const db = await open();
     return new Promise((resolve,reject) => {
-      const tx = db.transaction(stores,mode); let result;
+      let tx; try {tx=db.transaction(stores,mode,{durability:'strict'});} catch (_) {tx=db.transaction(stores,mode);}
+      let result;
       tx.oncomplete = () => resolve(result);
       tx.onerror = () => reject(tx.error || new Error('Telefon kaydı yazılamadı'));
       tx.onabort = () => reject(tx.error || new Error('Telefon kaydı iptal edildi'));
@@ -37,6 +40,21 @@
       const r=tx.objectStore('reports').getAll();r.onsuccess=()=>done(r.result);
     });
     return all.filter(r=>r.meta.siteID===siteID && (!uid || r.meta.uid===uid)).sort((a,b)=>a.log.timestamp-b.log.timestamp);
+  }
+  async function packages(siteID) {
+    const all = await transaction(['packages'],'readonly',(tx,done)=>{
+      const request=tx.objectStore('packages').getAll();request.onsuccess=()=>done(request.result);
+    });
+    return all.filter(p=>p.siteID===siteID);
+  }
+  async function putPackage(data) {
+    await transaction(['packages'],'readwrite',tx=>{
+      const store=tx.objectStore('packages'), request=store.getAll();
+      request.onsuccess=()=>{
+        for(const p of request.result) if(p.siteID===data.siteID && p.username===data.username && p.uid!==data.uid) store.delete(p.id);
+        store.put(clone(data));
+      };
+    });
   }
   async function active(meta) {
     return transaction(['active'],'readonly',(tx,done) => {
@@ -134,6 +152,7 @@
   function failed(error,retry) {
     const v=modal();v.title.textContent='Kayıtlarınız güvende';v.icon.textContent='!';v.text.textContent=explain(error);
     v.step.textContent=error.code==='AUTH_REQUIRED'?'Giriş bekleniyor':'Gönderim tamamlanmadı';
+    if(error.code!=='AUTH_REQUIRED')v.text.textContent+=' ('+(error.code || error.message)+')';
     v.close.hidden=false;v.retry.hidden=error.code==='AUTH_REQUIRED';v.retry.onclick=retry;
   }
   function timeout(promise,ms=40000) {
@@ -170,17 +189,35 @@
     const cleanLog={...historyLog,points:points.map(({offlineBase64,...point})=>point)};
     onProgress(.85,'Devriye raporu kaydediliyor');
     if(c.auth.currentUser?.uid!==record.meta.uid)throw Object.assign(new Error('Oturum değişti'),{code:'AUTH_REQUIRED'});
-    await timeout(c.set(c.ref(c.db,`devriyeHistory/${cleanLog.dateKey}/${cleanLog.user}/${cleanLog.patrolId}`),cleanLog));
-    if(cleanLog.hedefSaat && cleanLog.hedefSaat!=='Belirtilmedi') {
-      onProgress(.93,'Devriye saati işaretleniyor');
+    const writes = {[`devriyeHistory/${cleanLog.dateKey}/${cleanLog.user}/${cleanLog.patrolId}`]:cleanLog};
+    if(cleanLog.hedefSaat && cleanLog.hedefSaat!=='Belirtilmedi' && cleanLog.okunanSayi>0) {
       const m=record.meta;
       const path=`tamamlananDevriyeSaatleri/${m.shiftDate}/${m.saatModu==='blok'?cleanLog.bolge+'/':''}${cleanLog.hedefSaat}`;
-      const name=cleanLog.name || cleanLog.user;
-      if(c.auth.currentUser?.uid!==record.meta.uid)throw Object.assign(new Error('Oturum değişti'),{code:'AUTH_REQUIRED'});
-      await timeout(c.set(c.ref(c.db,path),cleanLog.okunanSayi===0?null:name+(cleanLog.status==='Eksik Devriye'?' - Eksik Devriye':'')));
+      writes[path]=(cleanLog.name || cleanLog.user)+(cleanLog.status==='Eksik Devriye'?' - Eksik Devriye':'');
     }
-    await remove(record.id); // Tüm gerekli Firebase cevapları başarılı olmadan kuyruktan silinmez.
+    // Tek atomik RTDB güncellemesi: rapor ve saat birlikte onaylanır.
+    // Aynı patrolId yeniden denense bile ikinci rapor oluşmaz.
+    await timeout(c.update(c.ref(c.db),writes));
+    await confirmRecord(record,writes); // Tüm gerekli Firebase cevapları başarılı olmadan kuyruktan silinmez.
     onProgress(1,'Kaydedildi');
+  }
+  async function confirmRecord(record,writes) {
+    await transaction(['reports','packages'],'readwrite',tx=>{
+      const store=tx.objectStore('packages'), request=store.get(record.meta.siteID+'|'+record.meta.uid);
+      request.onsuccess=()=>{
+        const pack=request.result;
+        if(pack) {
+          for(const [path,value] of Object.entries(writes)) if(path.startsWith('tamamlananDevriyeSaatleri/')) {
+            const parts=path.split('/'), parent=parts.slice(0,2).join('/');
+            let node=pack.data[parent] ||= {};
+            for(const part of parts.slice(2,-1)) node=node[part] ||= {};
+            node[parts.at(-1)]=value;
+          }
+          store.put(pack);
+        }
+        tx.objectStore('reports').delete(record.id);
+      };
+    });
   }
   async function doSync(c) {
     if(!navigator.onLine)return false;
@@ -222,13 +259,17 @@
     }).finally(()=>{pendingSync=null;pendingKey=null;});
     return pendingSync;
   }
+  let detach;
   function attach(c) {
+    if(detach)detach();
     indexContext=c;
     const run=()=>{if(navigator.onLine)void sync(indexContext);};
-    c.onAuthStateChanged(c.auth,run);
+    const offAuth=c.onAuthStateChanged(c.auth,run);
     window.addEventListener('online',run);
-    window.addEventListener('kolart-package-ready',run);
-    document.addEventListener('visibilitychange',()=>{if(!document.hidden)run();});
+
+    const visible=()=>{if(!document.hidden)run();};
+    document.addEventListener('visibilitychange',visible);
+    detach=()=>{offAuth();window.removeEventListener('online',run);document.removeEventListener('visibilitychange',visible);};
     // İlk callback Firebase'in kalıcı oturumu geri yüklemesini bekler.
   }
   async function isOnline() {
@@ -239,7 +280,7 @@
       return response.ok;
     } catch(_){return false;}finally{clearTimeout(timer);}
   }
-  window.KolartOfflineSync={BUILD,open,list,active,saveActive,enqueue,sync,attach,isOnline};
+  window.KolartOfflineSync={BUILD,open,list,active,saveActive,enqueue,sync,attach,isOnline,packages,putPackage};
   // HTTP önbelleğinden eski index dönse bile internet yokken Auth ekranında kalma.
   function routeOfflineEntry() {
     const page=location.pathname.split('/').pop();
