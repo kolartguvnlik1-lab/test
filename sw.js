@@ -1,25 +1,21 @@
-/* =========================================================
-   KOLART PWA SERVICE WORKER
-   v5 - INDEX HER ZAMAN AÇILIR
-   ========================================================= */
+/* KOLART SERVICE WORKER - v6 */
 
 'use strict';
 
-const BUILD = '20261008-2050-v5';
+const BUILD = '20261008-2135-v6';
 
-const BASE = new URL('./', self.location.href);
+const CACHE_NAME =
+    'kolart-offline-shell-v6-' + BUILD;
 
-/* Offline paket cache'i */
-const SHELL = 'kolart-offline-shell-v5-' + BUILD;
+const BASE =
+    self.registration.scope;
 
-/* Paket hazır işareti */
-const MARKER = new URL('__kolart_shell_v5', BASE).href;
+const MARKER =
+    new URL(
+        '__kolart_shell_v6',
+        BASE
+    ).href;
 
-/*
- * Offline çalışması gereken dosyalar.
- * index.html özellikle burada:
- * PWA internet yokken de index.html açabilsin.
- */
 const FILES = [
     'index.html',
     'offline-devriye.html',
@@ -30,495 +26,580 @@ const FILES = [
     'logo.png'
 ];
 
+self.addEventListener(
+    'install',
+    event => {
 
-/* =========================================================
-   INSTALL
-   ========================================================= */
+        /*
+         * Yeni Service Worker hemen aktif olsun.
+         */
+        self.skipWaiting();
 
-self.addEventListener('install', event => {
-    event.waitUntil(
-        self.skipWaiting()
-    );
-});
+        /*
+         * Shell kurulumu burada zorunlu değil.
+         * Ana sayfa KOLART_SHELL_PREPARE mesajı
+         * gönderdiğinde hazırlanacak.
+         */
+    }
+);
+
+self.addEventListener(
+    'activate',
+    event => {
+
+        event.waitUntil(
+            (async () => {
+
+                /*
+                 * Eski KOLART cache'lerini temizle.
+                 */
+                const keys =
+                    await caches.keys();
+
+                await Promise.all(
+                    keys
+                        .filter(
+                            key =>
+                                key.startsWith(
+                                    'kolart-offline-shell-'
+                                ) &&
+                                key !== CACHE_NAME
+                        )
+                        .map(
+                            key =>
+                                caches.delete(key)
+                        )
+                );
+
+                await self.clients.claim();
+
+            })()
+        );
+    }
+);
 
 
-/* =========================================================
-   ACTIVATE
-   ========================================================= */
+/*
+ * Tek dosya indirme fonksiyonu.
+ */
+async function fetchWithTimeout(
+    url,
+    timeout = 30000
+) {
 
-self.addEventListener('activate', event => {
-    event.waitUntil(
-        (async () => {
+    const controller =
+        new AbortController();
 
-            await self.clients.claim();
+    const timer =
+        setTimeout(
+            () => controller.abort(),
+            timeout
+        );
 
-            /*
-             * Eski shell cache'lerini temizle.
-             * Yeni sürüm kendi cache'ini kullanır.
-             */
-            const keys = await caches.keys();
+    try {
 
-            await Promise.all(
-                keys
-                    .filter(key =>
-                        key.startsWith('kolart-offline-shell-') &&
-                        key !== SHELL
-                    )
-                    .map(key => caches.delete(key))
+        const response =
+            await fetch(
+                url,
+                {
+                    cache: 'no-store',
+                    signal: controller.signal
+                }
             );
-
-        })()
-    );
-});
-
-
-/* =========================================================
-   YARDIMCI FONKSİYONLAR
-   ========================================================= */
-
-async function fetchTimed(request, timeout = 5000) {
-
-    return await Promise.race([
-
-        fetch(request),
-
-        new Promise((_, reject) => {
-
-            setTimeout(() => {
-                reject(new Error('Network timeout'));
-            }, timeout);
-
-        })
-
-    ]);
-
-}
-
-
-/* =========================================================
-   OFFLINE PAKET HAZIR MI?
-   ========================================================= */
-
-async function shellReady() {
-
-    const cache = await caches.open(SHELL);
-
-    const marker = await cache.match(MARKER);
-
-    if (!marker) {
-        return false;
-    }
-
-    for (const file of FILES) {
-
-        const url = new URL(file, BASE).href;
-
-        const response = await cache.match(url);
-
-        if (!response) {
-            return false;
-        }
-
-    }
-
-    return true;
-}
-
-
-/* =========================================================
-   OFFLINE PAKET HAZIRLAMA
-   ========================================================= */
-
-async function prepareShell() {
-
-    const cache = await caches.open(SHELL);
-
-    /*
-     * Dosyaları tek tek indiriyoruz.
-     * Bir dosya indirilemezse paket başarısız kabul edilir.
-     */
-
-    for (const file of FILES) {
-
-        const url = new URL(file, BASE);
-
-        const response = await fetchTimed(url, 15000);
 
         if (!response.ok) {
             throw new Error(
-                'Offline dosyası indirilemedi: ' + file
+                `${response.status} ${response.statusText}`
             );
         }
 
-        await cache.put(url.href, response.clone());
+        return response;
 
+    } finally {
+
+        clearTimeout(timer);
+    }
+}
+
+
+/*
+ * Offline shell hazırlanıyor.
+ */
+async function prepareShell(
+    requestedBuild
+) {
+
+    if (
+        requestedBuild &&
+        requestedBuild !== BUILD
+    ) {
+
+        throw new Error(
+            `Build uyuşmuyor. SW=${BUILD}, İstenen=${requestedBuild}`
+        );
     }
 
+    const cache =
+        await caches.open(CACHE_NAME);
+
+    const total =
+        FILES.length;
+
+    let completed = 0;
+
+    for (const file of FILES) {
+
+        const url =
+            new URL(
+                file,
+                BASE
+            ).href;
+
+        try {
+
+            const response =
+                await fetchWithTimeout(
+                    url,
+                    30000
+                );
+
+            await cache.put(
+                url,
+                response.clone()
+            );
+
+            completed++;
+
+            const percent =
+                55 +
+                Math.round(
+                    (completed / total) * 25
+                );
+
+            await broadcast({
+                type:
+                    'KOLART_SHELL_PROGRESS',
+
+                build:
+                    BUILD,
+
+                percent,
+
+                message:
+                    `Offline dosyası hazırlanıyor: ${file}`,
+
+                file,
+
+                completed,
+
+                total
+            });
+
+        } catch (error) {
+
+            console.error(
+                '[KOLART SW] Dosya alınamadı:',
+                file,
+                error
+            );
+
+            /*
+             * logo.png gibi opsiyonel dosyalarda
+             * tüm offline sistemi çökertme.
+             */
+            if (
+                file === 'logo.png'
+            ) {
+
+                completed++;
+
+                await broadcast({
+                    type:
+                        'KOLART_SHELL_PROGRESS',
+
+                    build:
+                        BUILD,
+
+                    percent:
+                        55 +
+                        Math.round(
+                            (completed / total) * 25
+                        ),
+
+                    message:
+                        `Opsiyonel dosya atlandı: ${file}`,
+
+                    file,
+
+                    completed,
+
+                    total
+                });
+
+                continue;
+            }
+
+            throw new Error(
+                `Offline dosyası alınamadı: ${file}`
+            );
+        }
+    }
 
     /*
-     * Paket tamamen hazır olduktan sonra marker yazılır.
+     * Marker oluştur.
+     * Böylece shell gerçekten hazırlanmış oluyor.
      */
-
     await cache.put(
         MARKER,
         new Response(
             JSON.stringify({
-                version: BUILD,
-                preparedAt: new Date().toISOString()
+                build: BUILD,
+                createdAt: Date.now()
             }),
             {
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type':
+                        'application/json'
                 }
             }
         )
     );
 
-    return true;
+    await broadcast({
+        type:
+            'KOLART_SHELL_PROGRESS',
+
+        build:
+            BUILD,
+
+        percent:
+            80,
+
+        message:
+            'Offline dosyaları hazır.',
+
+        done:
+            false
+    });
+
+    return {
+        ok: true,
+        build: BUILD
+    };
 }
 
 
-/* =========================================================
-   MESSAGE
-   ========================================================= */
+/*
+ * Tüm client'lara mesaj gönder.
+ */
+async function broadcast(
+    message
+) {
 
-self.addEventListener('message', event => {
+    const clients =
+        await self.clients.matchAll({
+            includeUncontrolled: true,
+            type: 'window'
+        });
 
-    const data = event.data || {};
+    for (const client of clients) {
 
-    /*
-     * INDEX'TEN:
-     *
-     * KOLART_SHELL_PREPARE
-     *
-     * mesajı geldiğinde offline paket hazırlanır.
-     */
+        client.postMessage(
+            message
+        );
+    }
+}
 
-    if (data.type === 'KOLART_SHELL_PREPARE') {
+
+/*
+ * Ana sayfa ile mesajlaşma.
+ */
+self.addEventListener(
+    'message',
+    event => {
+
+        const data =
+            event.data || {};
+
+        if (
+            data.type !==
+            'KOLART_SHELL_PREPARE'
+        ) {
+            return;
+        }
 
         event.waitUntil(
-
             (async () => {
 
                 try {
 
-                    await prepareShell();
+                    const result =
+                        await prepareShell(
+                            data.build
+                        );
 
-                    const clients = await self.clients.matchAll({
-                        type: 'window',
-                        includeUncontrolled: true
+                    await broadcast({
+
+                        type:
+                            'KOLART_SHELL_PROGRESS',
+
+                        build:
+                            BUILD,
+
+                        percent:
+                            80,
+
+                        message:
+                            'Offline shell hazır.',
+
+                        done:
+                            true,
+
+                        ok:
+                            true
                     });
 
-                    for (const client of clients) {
+                    /*
+                     * Mesajı gönderen client'a
+                     * ayrıca cevap ver.
+                     */
+                    if (
+                        event.source
+                    ) {
 
-                        client.postMessage({
-                            type: 'KOLART_SHELL_READY',
-                            version: BUILD,
-                            ok: true
+                        event.source.postMessage({
+
+                            type:
+                                'KOLART_SHELL_PROGRESS',
+
+                            build:
+                                BUILD,
+
+                            percent:
+                                80,
+
+                            message:
+                                'Offline shell hazır.',
+
+                            done:
+                                true,
+
+                            ok:
+                                true
                         });
-
                     }
 
                 } catch (error) {
 
                     console.error(
-                        '[KOLART SW] Offline paket hazırlama hatası:',
+                        '[KOLART SW] Shell hazırlama hatası:',
                         error
                     );
 
-                    const clients = await self.clients.matchAll({
-                        type: 'window',
-                        includeUncontrolled: true
-                    });
+                    const payload = {
 
-                    for (const client of clients) {
+                        type:
+                            'KOLART_SHELL_PROGRESS',
 
-                        client.postMessage({
-                            type: 'KOLART_SHELL_READY',
-                            version: BUILD,
-                            ok: false,
-                            error: String(error)
-                        });
+                        build:
+                            BUILD,
 
+                        percent:
+                            0,
+
+                        message:
+                            error?.message ||
+                            'Offline shell hazırlanamadı.',
+
+                        done:
+                            true,
+
+                        ok:
+                            false,
+
+                        error:
+                            error?.message ||
+                            'Bilinmeyen hata'
+                    };
+
+                    await broadcast(
+                        payload
+                    );
+
+                    if (
+                        event.source
+                    ) {
+                        event.source.postMessage(
+                            payload
+                        );
                     }
-
                 }
 
             })()
-
         );
-
-        return;
     }
+);
 
 
-    /*
-     * INDEX'TEN:
-     *
-     * KOLART_SHELL_STATUS
-     *
-     * mesajı geldiğinde paket hazır mı kontrol edilir.
-     */
+/*
+ * FETCH
+ *
+ * Online:
+ *   Önce internetten güncel dosyayı alır.
+ *
+ * Offline:
+ *   Cache'den ilgili dosyayı verir.
+ */
+self.addEventListener(
+    'fetch',
+    event => {
 
-    if (data.type === 'KOLART_SHELL_STATUS') {
+        const request =
+            event.request;
 
-        event.waitUntil(
+        if (
+            request.method !==
+            'GET'
+        ) {
+            return;
+        }
 
-            (async () => {
+        const url =
+            new URL(
+                request.url
+            );
 
-                const ready = await shellReady();
+        /*
+         * Sadece kendi origin'imiz.
+         */
+        if (
+            url.origin !==
+            self.location.origin
+        ) {
+            return;
+        }
 
-                if (event.source) {
+        /*
+         * Service Worker kendi özel marker'ını
+         * network'e gönderme.
+         */
+        if (
+            url.href === MARKER
+        ) {
+            event.respondWith(
+                caches.match(
+                    url.href,
+                    {
+                        cacheName:
+                            CACHE_NAME
+                    }
+                )
+            );
 
-                    event.source.postMessage({
-
-                        type: 'KOLART_SHELL_STATUS_RESULT',
-
-                        ready,
-
-                        version: BUILD
-
-                    });
-
-                }
-
-            })()
-
-        );
-
-    }
-
-});
-
-
-/* =========================================================
-   FETCH
-   ========================================================= */
-
-self.addEventListener('fetch', event => {
-
-    const request = event.request;
-
-    /*
-     * Sadece GET isteklerini ele al.
-     *
-     * Firebase POST/PUT vs. isteklerine dokunmuyoruz.
-     */
-
-    if (request.method !== 'GET') {
-        return;
-    }
-
-
-    const url = new URL(request.url);
-
-
-    /*
-     * Firebase / Google servisleri gibi harici istekleri
-     * Service Worker cache'ine alma.
-     */
-
-    if (
-        url.origin !== self.location.origin
-    ) {
-
-        return;
-
-    }
-
-
-    /*
-     * Navigasyon isteği:
-     *
-     * PWA açıldığında ister internet olsun,
-     * ister internet olmasın INDEX açılacak.
-     */
-
-    if (request.mode === 'navigate') {
+            return;
+        }
 
         event.respondWith(
-
-            (async () => {
-
-                /*
-                 * Önce internetten güncel sayfayı almaya çalış.
-                 */
-
-                try {
-
-                    return await fetchTimed(
-                        request,
-                        5000
-                    );
-
-                } catch (error) {
-
-                    /*
-                     * İnternet yoksa HER ZAMAN index.html
-                     * cache'inden aç.
-                     */
-
-                    const cache =
-                        await caches.open(SHELL);
-
-                    const indexUrl =
-                        new URL(
-                            'index.html',
-                            BASE
-                        ).href;
-
-                    const indexResponse =
-                        await cache.match(indexUrl);
-
-                    if (indexResponse) {
-                        return indexResponse;
-                    }
-
-
-                    /*
-                     * index.html cache'te yoksa,
-                     * normal cache'lerde ara.
-                     */
-
-                    const fallback =
-                        await caches.match(indexUrl);
-
-                    if (fallback) {
-                        return fallback;
-                    }
-
-
-                    /*
-                     * Hiçbir şey yoksa basit cevap.
-                     */
-
-                    return new Response(
-                        `
-                        <!DOCTYPE html>
-                        <html lang="tr">
-                        <head>
-                            <meta charset="UTF-8">
-                            <meta name="viewport"
-                                  content="width=device-width,initial-scale=1">
-                            <title>KOLART</title>
-                        </head>
-                        <body>
-                            <h2>KOLART</h2>
-                            <p>Offline paket henüz hazırlanmadı.</p>
-                        </body>
-                        </html>
-                        `,
-                        {
-                            status: 503,
-                            headers: {
-                                'Content-Type':
-                                    'text/html; charset=utf-8'
-                            }
-                        }
-                    );
-
-                }
-
-            })()
-
+            handleFetch(request)
         );
-
-        return;
     }
+);
 
+
+async function handleFetch(
+    request
+) {
 
     /*
-     * Normal dosya istekleri.
+     * Önce network.
      */
+    try {
 
-    event.respondWith(
+        const response =
+            await fetch(
+                request
+            );
 
-        (async () => {
-
-            /*
-             * Önce normal internet isteğini dene.
-             */
-
-            try {
-
-                const response =
-                    await fetchTimed(
-                        request,
-                        5000
-                    );
-
-                /*
-                 * Başarılıysa güncel cevabı kullan.
-                 */
-
-                if (response && response.ok) {
-                    return response;
-                }
-
-            } catch (error) {
-
-                /*
-                 * İnternet yok.
-                 * Aşağıda cache'e geçilecek.
-                 */
-
-            }
-
-
-            /*
-             * Offline shell cache.
-             */
+        /*
+         * Başarılı network cevabını
+         * cache'e yaz.
+         */
+        if (
+            response &&
+            response.ok
+        ) {
 
             const cache =
-                await caches.open(SHELL);
-
-            const cached =
-                await cache.match(
-                    request,
-                    {
-                        ignoreSearch: true
-                    }
+                await caches.open(
+                    CACHE_NAME
                 );
 
-            if (cached) {
-                return cached;
-            }
+            await cache.put(
+                request,
+                response.clone()
+            );
+        }
 
+        return response;
 
-            /*
-             * Genel CacheStorage fallback.
-             */
+    } catch (_) {
 
-            const fallback =
-                await caches.match(
-                    request,
-                    {
-                        ignoreSearch: true
-                    }
-                );
-
-            if (fallback) {
-                return fallback;
-            }
-
-
-            /*
-             * Bulunamadı.
-             */
-
-            return new Response(
-                'Offline içerik bulunamadı.',
+        /*
+         * Network yoksa cache.
+         */
+        const cached =
+            await caches.match(
+                request,
                 {
-                    status: 503,
-                    headers: {
-                        'Content-Type':
-                            'text/plain; charset=utf-8'
-                    }
+                    cacheName:
+                        CACHE_NAME
                 }
             );
 
-        })()
+        if (cached) {
+            return cached;
+        }
 
-    );
+        /*
+         * Navigation isteğinde index.html
+         * son çare olarak kullanılır.
+         */
+        if (
+            request.mode ===
+            'navigate'
+        ) {
 
-});
+            const index =
+                await caches.match(
+                    new URL(
+                        'index.html',
+                        BASE
+                    ).href,
+                    {
+                        cacheName:
+                            CACHE_NAME
+                    }
+                );
+
+            if (index) {
+                return index;
+            }
+        }
+
+        /*
+         * Hiçbir şey yoksa basit offline cevap.
+         */
+        return new Response(
+            'Offline içerik bulunamadı.',
+            {
+                status: 503,
+                statusText:
+                    'Service Unavailable',
+                headers: {
+                    'Content-Type':
+                        'text/plain; charset=utf-8'
+                }
+            }
+        );
+    }
+);
