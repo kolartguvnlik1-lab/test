@@ -2,10 +2,6 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<script>
-  // offline-sync.js içindeki eski otomatik yönlendirmeyi index için devre dışı bırak.
-  window.kolartOfflineRouting = true;
-</script>
 <script src="./offline-sync.js?v=20261008-2050"></script>
 <script src="./offline-paket.js?v=20261008-2311"></script>
 <meta charset="UTF-8">
@@ -630,14 +626,6 @@ input, textarea {
     </div>
 </div>
 
-<div id="noInternetModal" style="display:none; position:fixed; inset:0; z-index:999999; background:rgba(0,0,0,0.85); backdrop-filter:blur(10px); align-items:center; justify-content:center;">
-    <div style="background:#1c2e3f; padding:40px; border-radius:24px; width:85%; max-width:350px; text-align:center; border:1px solid #e74c3c; box-shadow:0 0 40px rgba(231,76,60,0.3);">
-        <div style="font-size:50px; margin-bottom:15px;">🌐</div>
-        <h2 style="color:#fff; margin-bottom:10px;">Bağlantı Yok!</h2>
-        <p style="color:#bdc3c7; font-size:14px; line-height:1.5;">İnternet bağlantınızı algılayamadık. Lütfen internet ayarlarınızı kontrol edin ve tekrar deneyin.</p>
-    </div>
-</div>
-
 <div id="loginStatusModal" style="display:none; position:fixed; inset:0; background:rgba(11,26,39,0.9); z-index:100006; align-items:center; justify-content:center;">
     <div style="background:rgba(255,255,255,0.06); backdrop-filter:blur(22px); padding:40px; border-radius:24px; width:80%; max-width:300px; text-align:center; border:1px solid rgba(255,255,255,0.1);">
         <h3 id="loginStatusText" style="color:#fff; font-size:16px;">Giriş yapılıyor...</h3>
@@ -664,25 +652,10 @@ input, textarea {
 <script>
 // Bu küçük bölüm Firebase/CDN yüklenmese de çevrimdışı giriş ekranında çalışır.
 (() => {
-  const note = 'İnternet yok. Sağ üstteki Offline Mod butonuyla devriyeye geçebilirsiniz.';
-  const message = document.getElementById('message');
-  const refresh = () => {
-    if (!navigator.onLine) {
-      message.textContent = note;
-      message.style.color = 'var(--cga-neon)';
-    } else if (message.textContent === note) {
-      message.textContent = '';
-      message.style.color = '';
-    }
-    document.getElementById('noInternetModal').style.display = 'none';
-  };
   document.getElementById('secLoginBtn').addEventListener('click', event => {
     if (navigator.onLine) return;
-    event.preventDefault(); event.stopImmediatePropagation(); refresh();
+    event.preventDefault(); event.stopImmediatePropagation();
   }, true);
-  window.addEventListener('offline', refresh);
-  window.addEventListener('online', refresh);
-  refresh();
   if ('serviceWorker' in navigator && window.isSecureContext) {
     // Eski sw.js bu ziyarette eski paket scriptini sunmuşsa yeni servisle bir kez yenile.
     navigator.serviceWorker.addEventListener('controllerchange', () => {
