@@ -2,14 +2,14 @@
 'use strict';
 
 const BUILD = '20261008-2050';
-const REVISION = '20261008-2311';
+const REVISION = '20261009-0030';
 
 const BASE = new URL('./', self.location.href);
 
 const SHELL =
   'kolart-offline-shell-v4-' + BUILD + '-' + REVISION;
 
-const MARKER = new URL('__kolart_shell_v5', BASE).href;
+const MARKER = new URL('__kolart_shell_v4', BASE).href;
 
 const FILES = [
   'index.html',
@@ -128,13 +128,22 @@ async function asset(file) {
   }
 
   if (
+    ['offline-devriye.html', 'offline-devriye.js'].includes(file) &&
+    !(await response.clone().text()).includes('kolart-offline-access:4hane-v1')
+  ) {
+    throw new Error(
+      file + ' yönetici parolası sürümü değil. Güncellenen dosyaları birlikte yükleyin.'
+    );
+  }
+
+  if (
     file === 'index.html' &&
     !(await response.clone().text()).includes(
       'id="offlineModeBtn"'
     )
   ) {
     throw new Error(
-      'index.html eski sürüm. Verilen üç dosyayı birlikte yükleyin.'
+      'index.html eski sürüm. Güncellenen dosyaları birlikte yükleyin.'
     );
   }
 
@@ -145,7 +154,7 @@ async function asset(file) {
     )
   ) {
     throw new Error(
-      'offline-paket.js eski sürüm. Verilen üç dosyayı birlikte yükleyin.'
+      'offline-paket.js eski sürüm. Güncellenen dosyaları birlikte yükleyin.'
     );
   }
 
