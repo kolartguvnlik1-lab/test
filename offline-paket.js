@@ -63,7 +63,7 @@
     const response = await cache.match(manifestURL(siteID, username));
     if (!response) return null;
     const candidate = await response.json();
-    if (!candidate.complete || candidate.schema !== 1 || candidate.siteID !== siteID || candidate.username !== username) return null;
+    if (!candidate.complete || candidate.schema !== 2 || candidate.siteID !== siteID || candidate.username !== username) return null;
     if (!await caches.has(candidate.assetCache)) return null;
     const assets = await caches.open(candidate.assetCache);
     for (const url of candidate.requiredAssets) if (!await assets.match(url)) return null;
@@ -79,8 +79,8 @@
   }
   async function worker() {
     const reg = await registration;
-    if (reg.active) return reg.active;
     const candidate = reg.installing || reg.waiting;
+    if (!candidate && reg.active) return reg.active;
     if (!candidate) throw new Error('Paket servisi hazır değil');
     await new Promise((resolve, reject) => {
       const check = () => { if (candidate.state === 'activated') resolve();
@@ -140,6 +140,7 @@
     }
     if (m?.type === 'KOLART_PACKAGE_ERROR') console.warn('[Offline paket hazırlanamadı]', m.message);
   });
+  navigator.serviceWorker?.addEventListener('controllerchange', () => void request());
   window.addEventListener('online', () => void request());
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && Date.now()-lastJob > 15000) void request();
