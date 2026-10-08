@@ -2,9 +2,6 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<script>
-  if (!navigator.onLine) location.replace(new URL('offline-devriye.html', location.href));
-</script>
 <script src="./offline-sync.js?v=20261008-2050"></script>
 <script src="./offline-paket.js?v=20261008-2050"></script>
 <meta charset="UTF-8">
@@ -491,6 +488,35 @@ input, textarea {
   width: 100%;
 }
 
+/* --- OFFLINE MOD BUTONU --- */
+#offlineModeBtn {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 100000;
+  border: 1px solid rgba(204,255,0,0.35);
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: rgba(8,8,8,0.78);
+  color: var(--cga-neon);
+  font: 800 11px 'Montserrat', sans-serif;
+  letter-spacing: .4px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 14px var(--cga-glow);
+  transition: .2s ease;
+}
+#offlineModeBtn:hover { transform: translateY(-1px) scale(1.03); }
+#offlineModeBtn:active { transform: scale(.96); }
+#offlineModeBtn .offline-dot {
+  display:inline-block;
+  width:7px; height:7px; border-radius:50%;
+  background:var(--cga-neon);
+  margin-right:6px;
+  box-shadow:0 0 8px var(--cga-shadow);
+}
+#offlineModeBtn.offline-ready .offline-dot { background:#2ecc71; }
+
 /* Göz ikonunun stili - Renk temaya bağlandı */
 .toggle-password {
   position: absolute;
@@ -507,6 +533,10 @@ input, textarea {
 </style>
 </head>
 <body>
+<button id="offlineModeBtn" type="button" aria-label="Çevrimdışı moda geç">
+  <span class="offline-dot"></span> OFFLINE MOD
+</button>
+
 <div class="container">
     <img src="logo.png" class="cga-logo" alt="CGA Logo">
 
@@ -654,11 +684,76 @@ async function finishOfflineUploads(app, db, auth, siteID) {
     return done;
 }
 // Paket yalnız doğrulanmış güvenlik girişinden sonra hazırlanır.
+// ============================================================
+// KOLART OFFLINE SÜRÜM YÖNETİMİ
+// v1 -> v2 yaptığınızda telefonda v1 varsa paket yeniden hazırlanır.
+// Aynı sürümde paket tekrar indirilmez.
+// ============================================================
+const OFFLINE_BUNDLE_VERSION = "v1";
+const OFFLINE_VERSION_ROOT = "offlineversiyon";
+
+function offlineVersionKey(siteID, username) {
+    const safeSite = String(siteID || "site").trim();
+    const safeUser = String(username || "guvenlik").trim().toLocaleUpperCase('tr-TR');
+    return `${safeSite}__${safeUser}`;
+}
+
+function offlineLocalMarkerKey(siteID, username) {
+    return `kolart-offline-version:${offlineVersionKey(siteID, username)}`;
+}
+
+async function getOfflineVersion(db, siteID, username) {
+    const key = offlineVersionKey(siteID, username);
+    const snap = await get(child(ref(db), `${OFFLINE_VERSION_ROOT}/${key}`));
+    return snap.exists() ? String(snap.val()).trim() : null;
+}
+
+async function setOfflineVersion(db, siteID, username, version) {
+    const key = offlineVersionKey(siteID, username);
+    await set(ref(db, `${OFFLINE_VERSION_ROOT}/${key}`), String(version));
+    localStorage.setItem(offlineLocalMarkerKey(siteID, username), String(version));
+}
+
 async function preparePatrolBundle(app, db, auth, siteID, username, type, password) {
     if (type !== 'security') return true;
-    // Önce bekleyen kayıtları onaylat: yeni paket az önce yüklenen saatleri de içerir.
+
+    if (!siteID || !username) {
+        console.warn('[KOLART] Offline sürümü için siteID/güvenlik adı eksik.');
+        return false;
+    }
+
+    const markerKey = offlineLocalMarkerKey(siteID, username);
+    const localVersion = localStorage.getItem(markerKey);
+
+    // Firebase kaydı merkezde görünürlük / kayıt amacıyla okunur.
+    // Asıl cihaz kontrolü, telefondaki işaret ile uygulamanın mevcut
+    // OFFLINE_BUNDLE_VERSION değerinin karşılaştırılmasıdır.
+    const firebaseVersion = await getOfflineVersion(db, siteID, username);
+    console.log('[KOLART] Firebase offline sürümü:', firebaseVersion || '(yok)');
+
+    // Telefon zaten bu uygulama sürümünü hazırlamışsa HİÇBİR PAKET İNDİRME.
+    // Örn. telefon v1, kod v2 olduysa burada v1 !== v2 => yeni paket hazırlanır.
+    if (localVersion === OFFLINE_BUNDLE_VERSION) {
+        console.log('[KOLART] Offline paket zaten hazır:', OFFLINE_BUNDLE_VERSION);
+        return true;
+    }
+
+    // İlk kurulum veya uygulama sürümü değişikliği.
     if (!await finishOfflineUploads(app, db, auth, siteID)) return false;
-    return !!await window.KolartOffline.start({app,db,auth,siteID,username,password,get,ref});
+
+    const prepared = await window.KolartOffline.start({
+        app, db, auth, siteID, username, password, get, ref
+    });
+
+    if (!prepared) return false;
+
+    // Firebase:
+    // offlineversiyon/{siteID}__{GÜVENLİK ADI} = v1
+    // Örnek: offlineversiyon/1234__CEM GAZİ ARSLAN = v1
+    await setOfflineVersion(db, siteID, username, OFFLINE_BUNDLE_VERSION);
+
+    console.log('[KOLART] Yeni offline paket hazır:', OFFLINE_BUNDLE_VERSION);
+    return true;
 }
 // --- GÜVENLİK ANAHTARI ---
 const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
@@ -1150,14 +1245,26 @@ document.addEventListener('click', (e) => {
   }
 });
 
-window.addEventListener('offline', () => {
-    location.replace(new URL('offline-devriye.html',location.href));
-});
+// INDEX SAYFASI İNTERNET OLMADAN DA AÇIK KALIR.
+// Sağ üstteki OFFLINE MOD butonu gerçek offline-devriye ekranına götürür.
+const offlineModeBtn = document.getElementById('offlineModeBtn');
+if (offlineModeBtn) {
+    offlineModeBtn.addEventListener('click', () => {
+        window.location.href = new URL('offline-devriye.html', location.href).href;
+    });
+}
+
 window.addEventListener('online', () => {
-    document.getElementById('noInternetModal').style.display = 'none';
+    const m = document.getElementById('noInternetModal');
+    if (m) m.style.display = 'none';
 });
-if (!navigator.onLine) {
-    location.replace(new URL('offline-devriye.html',location.href));
+
+window.addEventListener('offline', () => {
+    if (offlineModeBtn) offlineModeBtn.classList.add('offline-ready');
+});
+
+if (!navigator.onLine && offlineModeBtn) {
+    offlineModeBtn.classList.add('offline-ready');
 }
 
 let deferredPrompt;
