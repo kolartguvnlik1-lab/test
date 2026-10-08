@@ -35,8 +35,8 @@ async function refreshQueueLabel() {
   document.getElementById('offlineUserLabel').textContent = currentUser
     ? `${currentUser.name} · Telefonda bekleyen ${records.length} devriye` : '';
   document.getElementById('offlineStateText').textContent = navigator.onLine
-    ? 'Bağlantı var. Bekleyen devriyeleri göndermek için giriş ekranına dönün.'
-    : 'İnternet yok. Devriyeler ve fotoğraflar bu telefona kaydedilir.';
+    ? 
+    : 'İnternet yok. Devriyeler  bu telefona kaydedilir.';
 }
 function stopPosition() {
   if(countdownInterval) {clearInterval(countdownInterval);countdownInterval=null;}
@@ -123,7 +123,7 @@ async function bootLogin() {
     const candidate=await window.KolartOffline.last();
     if(!candidate) {
       submit.disabled=true;
-      message.textContent='Bu cihaz için tamamlanmış paket bulunamadı. İnternet varken index’te giriş yapın ve “Çevrimdışı paket hazır” mesajını bekleyin.';
+      message.textContent='Bu cihaz için tamamlanmış paket bulunamadı. İnternet varken 1 Defa normal  giriş yapın ve “Çevrimdışı paket hazır” mesajını bekleyin.';
       return;
     }
     document.getElementById('offlineUsername').value=candidate.username;
@@ -153,7 +153,7 @@ document.getElementById('offlineUsername').addEventListener('input',()=>{
     renderManagerPrompt(ready ? candidate : null);
     submit.disabled=!ready;
     message.textContent=!ready
-      ? 'Bu kullanıcı için tamamlanmış cihaz paketi bulunamadı. İnternet varken index’te giriş yapın.'
+      ? 'Bu kullanıcı için tamamlanmış cihaz paketi bulunamadı. İnternet varken tek seferlik normal ekrandan giriş yapın.'
       : (window.KolartOffline.requiresManagerPassword(candidate)
         ? 'Yöneticinizden 4 haneli şifre alın ve kendi profil şifrenizi girin.'
         : 'Devriye için profil şifrenizi girin.');
@@ -734,7 +734,7 @@ async function finalizeOffline(note,missed) {
     // IndexedDB işlemi tamamlanmadan ekran ve aktif devriye temizlenmez.
     devriyeStarted=false;isFinalizing=false;readPoints=[];startTime=null;secilenHedefSaat=null;activeRoute=null;
     uiReadyMode();await loadQRInterface();await refreshQueueLabel();
-    showAppModal('✓ TELEFONA KAYDEDİLDİ','Devriyeniz ve fotoğraflarınız telefon hafızasına kaydedildi. İnternet varken giriş ekranını açtığınızda otomatik yüklenecek.','check_circle');
+    showAppModal('✓ TELEFONA KAYDEDİLDİ','Devriyeniz  telefon hafızasına kaydedildi. İnternet varken giriş ekranını açtığınızda otomatik yüklenecek.','check_circle');
   } catch(error) {
     isFinalizing=false;startTimerLoop();
     showAppModal('KAYIT TAMAMLANAMADI','Aktif devriyeniz korunuyor. Tekrar bitirmeyi deneyin: '+escapeHTML(error.message),'error');
@@ -754,7 +754,7 @@ window.openBlockModal=async()=>{
 };
 const toIndex=()=>{
   if(devriyeStarted){showAppModal('AKTİF DEVRİYE','Önce devriyenizi bitirip telefona kaydedin.','warning');return;}
-  if(!navigator.onLine){showAppModal('İNTERNET BAĞLANTISI YOK','Devriyeler telefonda korunuyor. İnternet gelince bu düğmeden giriş ekranını açın.','wifi_off');return;}
+  if(!navigator.onLine){showAppModal('İNTERNET BAĞLANTISI YOK','Devriyeler telefonda korunuyor..','wifi_off');return;}
   location.href=new URL('index.html',window.KolartOffline.base).href;
 };
 document.getElementById('offlineUploadBtn').onclick=toIndex;
