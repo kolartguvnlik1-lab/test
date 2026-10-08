@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<script src="./offline-paket.js"></script>
+<script src="./offline-paket.js?v=20261008-sync2"></script>
+<script src="./offline-sync.js?v=20261008-sync2"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
@@ -636,9 +637,18 @@ input, textarea {
 
 <script type="module">
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-import { getDatabase, ref, get, child, update, onValue } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
-import { getAuth, signInWithEmailAndPassword, updatePassword } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { getDatabase, ref, get, child, update, onValue, set } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+import { getAuth, signInWithEmailAndPassword, updatePassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { getStorage, ref as sRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
+function offlineUploadContext(app, db, auth, siteID) {
+    return {app,db,auth,siteID,ref,get,set,
+        getStorage,sRef,uploadBytesResumable,getDownloadURL,onAuthStateChanged};
+}
+async function finishOfflineUploads(app, db, auth, siteID) {
+    const done = await window.KolartOfflineSync.sync(offlineUploadContext(app,db,auth,siteID));
+    return done;
+}
 // --- GÜVENLİK ANAHTARI ---
 const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
 const encryptData = (data) => CryptoJS.AES.encrypt(JSON.stringify(data), CONFIG_KEY).toString();
@@ -776,6 +786,11 @@ async function forcePasswordChange(username, type, activeDB, auth, reason) {
                 localStorage.setItem("securityUser", JSON.stringify({ username, password: maskPass(p1) }));
             }
             sessionStorage.setItem("currentUser", JSON.stringify({username, type}));
+            const uploadApp = auth.app;
+            const forcedSiteID = localStorage.getItem('siteID');
+            if (!await finishOfflineUploads(uploadApp,activeDB,auth,forcedSiteID)) {
+                this.disabled=false;this.innerText='GÜNCELLE VE GİRİŞ YAP';return;
+            }
             
             // Tüm gereksiz yetki yönlendirmeleri kaldırıldı, sadece güvenliğe atar
            // Tüm gereksiz yetki yönlendirmeleri kaldırıldı, sadece güvenlik (veya amir) sayfasına atar
@@ -824,6 +839,7 @@ window.addEventListener("load", async ()=>{
       let siteApp = getApps().find(a => a.name === `siteApp-${savedSiteID}`);
       if(!siteApp) siteApp = initializeApp(siteConfig, `siteApp-${savedSiteID}`);
       const siteDB = getDatabase(siteApp);
+      window.KolartOfflineSync.attach(offlineUploadContext(siteApp,siteDB,getAuth(siteApp),savedSiteID));
       hideQRButtons();
       await loadSiteName(siteDB);
     } else {
@@ -919,6 +935,10 @@ try {
                     }
                     // ---> BENİ HATIRLA EKLENTİSİ BURADA BİTİYOR <---
 
+                    if (statusModal) statusModal.style.display = 'none';
+                    if (!await finishOfflineUploads(app,activeDB,auth,siteId)) {
+                        loginBtn.disabled=false;loginBtn.style.opacity='1';return;
+                    }
                     window.location.href = "guvenlik.html"; // Sadece güvenlik sayfasına yönlendiriyor
                     return;
                 } else {
@@ -952,6 +972,10 @@ try {
         }
 
         sessionStorage.setItem("currentUser", JSON.stringify({ username: user.username, type: user.type }));
+        if (statusModal) statusModal.style.display = 'none';
+        if (!await finishOfflineUploads(app,activeDB,auth,siteId)) {
+            loginBtn.disabled=false;loginBtn.style.opacity='1';return;
+        }
 
         if (role === "security") {
             if (secRemember.checked) {
