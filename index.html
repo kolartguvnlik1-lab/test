@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <script>
-  if (!navigator.onLine) location.replace(new URL('offline-devriye.html', location.href));
+  // offline-sync.js içindeki eski otomatik yönlendirmeyi index için devre dışı bırak.
+  window.kolartOfflineRouting = true;
 </script>
 <script src="./offline-sync.js?v=20261008-2050"></script>
-<script src="./offline-paket.js?v=20261008-2050"></script>
+<script src="./offline-paket.js?v=20261008-2311"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
@@ -243,7 +244,7 @@ input::placeholder { color: rgba(236,240,241,0.6); }
 .corner-top {
   position: fixed;
   top: 10px;
-  right: 14px;
+  right: 152px;
   font-size: 10px;
   font-weight: 700;
   color: var(--cga-gold); 
@@ -252,6 +253,29 @@ input::placeholder { color: rgba(236,240,241,0.6); }
   user-select: none;
   pointer-events: none;
   z-index: 50;
+}
+
+.offline-mode-btn {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 14px;
+  border: 1px solid var(--cga-neon);
+  border-radius: 13px;
+  background: var(--cga-bg-secondary);
+  color: var(--cga-neon);
+  font: 700 12px 'Montserrat', sans-serif;
+  text-decoration: none;
+  box-shadow: 0 4px 18px var(--cga-glow);
+  cursor: pointer;
+}
+.offline-mode-btn:hover, .offline-mode-btn:focus-visible {
+  background: var(--cga-neon);
+  color: #000;
 }
 
 .securityText{
@@ -507,6 +531,7 @@ input, textarea {
 </style>
 </head>
 <body>
+<a id="offlineModeBtn" class="offline-mode-btn" href="./offline-devriye.html" aria-label="Offline Mod: çevrimdışı devriye sayfasını aç">📴 Offline Mod</a>
 <div class="container">
     <img src="logo.png" class="cga-logo" alt="CGA Logo">
 
@@ -636,12 +661,45 @@ input, textarea {
     </button>
 </div>
 
+<script>
+// Bu küçük bölüm Firebase/CDN yüklenmese de çevrimdışı giriş ekranında çalışır.
+(() => {
+  const note = 'İnternet yok. Sağ üstteki Offline Mod butonuyla devriyeye geçebilirsiniz.';
+  const message = document.getElementById('message');
+  const refresh = () => {
+    if (!navigator.onLine) {
+      message.textContent = note;
+      message.style.color = 'var(--cga-neon)';
+    } else if (message.textContent === note) {
+      message.textContent = '';
+      message.style.color = '';
+    }
+    document.getElementById('noInternetModal').style.display = 'none';
+  };
+  document.getElementById('secLoginBtn').addEventListener('click', event => {
+    if (navigator.onLine) return;
+    event.preventDefault(); event.stopImmediatePropagation(); refresh();
+  }, true);
+  window.addEventListener('offline', refresh);
+  window.addEventListener('online', refresh);
+  refresh();
+  if ('serviceWorker' in navigator && window.isSecureContext) {
+    // Eski sw.js bu ziyarette eski paket scriptini sunmuşsa yeni servisle bir kez yenile.
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (window.KolartOffline?.REVISION !== '20261008-2311') location.reload();
+    });
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+      .catch(error => console.warn('Service Worker hatası:', error.message));
+  }
+})();
+</script>
+
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 
 <script type="module">
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-import { getDatabase, ref, get, child, update, onValue, set } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+import { getDatabase, ref, get, child, update, onValue, set, runTransaction } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
 import { getAuth, signInWithEmailAndPassword, updatePassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { getStorage, ref as sRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
@@ -658,7 +716,7 @@ async function preparePatrolBundle(app, db, auth, siteID, username, type, passwo
     if (type !== 'security') return true;
     // Önce bekleyen kayıtları onaylat: yeni paket az önce yüklenen saatleri de içerir.
     if (!await finishOfflineUploads(app, db, auth, siteID)) return false;
-    return !!await window.KolartOffline.start({app,db,auth,siteID,username,password,get,ref});
+    return !!await window.KolartOffline.start({app,db,auth,siteID,username,password,get,ref,runTransaction});
 }
 // --- GÜVENLİK ANAHTARI ---
 const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
@@ -1150,15 +1208,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
-window.addEventListener('offline', () => {
-    location.replace(new URL('offline-devriye.html',location.href));
-});
-window.addEventListener('online', () => {
-    document.getElementById('noInternetModal').style.display = 'none';
-});
-if (!navigator.onLine) {
-    location.replace(new URL('offline-devriye.html',location.href));
-}
+// Çevrimdışıyken index açık kalır; yönlendirme yalnız Offline Mod bağlantısındadır.
 
 let deferredPrompt;
 const installBtn = document.getElementById('installBtn');
@@ -1175,13 +1225,7 @@ installBtn.addEventListener('click', async () => {
     deferredPrompt = null;
   }
 });
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then(() => console.log('Service Worker kaydedildi.'))
-      .catch(err => console.error('Service Worker hatası:', err));
-  });
-}
+// Servis kaydı yukarıdaki bağımsız scriptte yapılır; Firebase importuna bağlı değildir.
 </script>
 </body>
 </html>
