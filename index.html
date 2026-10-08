@@ -2,8 +2,8 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<script src="./offline-sync.js?v=20261008-2050"></script>
-<script src="./offline-paket.js?v=20261008-2050"></script>
+<script src="./offline-sync.js?v=20261008-2135-v6"></script>
+<script src="./offline-paket.js?v=20261008-2135-v6"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
@@ -488,35 +488,6 @@ input, textarea {
   width: 100%;
 }
 
-/* --- OFFLINE MOD BUTONU --- */
-#offlineModeBtn {
-  position: fixed;
-  top: 10px;
-  right: 12px;
-  z-index: 100000;
-  border: 1px solid rgba(204,255,0,0.35);
-  border-radius: 12px;
-  padding: 8px 12px;
-  background: rgba(8,8,8,0.78);
-  color: var(--cga-neon);
-  font: 800 11px 'Montserrat', sans-serif;
-  letter-spacing: .4px;
-  cursor: pointer;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 0 14px var(--cga-glow);
-  transition: .2s ease;
-}
-#offlineModeBtn:hover { transform: translateY(-1px) scale(1.03); }
-#offlineModeBtn:active { transform: scale(.96); }
-#offlineModeBtn .offline-dot {
-  display:inline-block;
-  width:7px; height:7px; border-radius:50%;
-  background:var(--cga-neon);
-  margin-right:6px;
-  box-shadow:0 0 8px var(--cga-shadow);
-}
-#offlineModeBtn.offline-ready .offline-dot { background:#2ecc71; }
-
 /* Göz ikonunun stili - Renk temaya bağlandı */
 .toggle-password {
   position: absolute;
@@ -533,10 +504,6 @@ input, textarea {
 </style>
 </head>
 <body>
-<button id="offlineModeBtn" type="button" aria-label="Çevrimdışı moda geç">
-  <span class="offline-dot"></span> OFFLINE MOD
-</button>
-
 <div class="container">
     <img src="logo.png" class="cga-logo" alt="CGA Logo">
 
@@ -666,6 +633,8 @@ input, textarea {
     </button>
 </div>
 
+<button id="offlineModeBtn" onclick="location.href='offline-devriye.html'" style="position:fixed;right:14px;top:14px;z-index:1000000;border:1px solid rgba(255,255,255,.22);background:rgba(8,18,30,.88);color:#fff;padding:10px 13px;border-radius:13px;font-weight:800;font-size:12px;letter-spacing:.4px;backdrop-filter:blur(12px);cursor:pointer;box-shadow:0 8px 25px rgba(0,0,0,.25);">OFFLINE MOD</button>
+
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 
@@ -683,77 +652,70 @@ async function finishOfflineUploads(app, db, auth, siteID) {
     const done = await window.KolartOfflineSync.sync(offlineUploadContext(app,db,auth,siteID));
     return done;
 }
-// Paket yalnız doğrulanmış güvenlik girişinden sonra hazırlanır.
 // ============================================================
 // KOLART OFFLINE SÜRÜM YÖNETİMİ
-// v1 -> v2 yaptığınızda telefonda v1 varsa paket yeniden hazırlanır.
-// Aynı sürümde paket tekrar indirilmez.
+// Firebase'deki offlineversiyon değeri MERKEZDEN yönetilir.
+// Cihaz bu değeri ASLA Firebase'e geri yazmaz.
+// Örnek: v1 -> v2 yaptığında, cihazdaki v1 paket otomatik yenilenir.
 // ============================================================
-const OFFLINE_BUNDLE_VERSION = "v1";
-const OFFLINE_VERSION_ROOT = "offlineversiyon";
+const OFFLINE_VERSION_ROOT = 'offlineversiyon';
 
 function offlineVersionKey(siteID, username) {
-    const safeSite = String(siteID || "site").trim();
-    const safeUser = String(username || "guvenlik").trim().toLocaleUpperCase('tr-TR');
-    return `${safeSite}__${safeUser}`;
+    return `${String(siteID || '').trim()}__${String(username || '').trim().toLocaleUpperCase('tr-TR')}`;
 }
 
-function offlineLocalMarkerKey(siteID, username) {
-    return `kolart-offline-version:${offlineVersionKey(siteID, username)}`;
-}
-
-async function getOfflineVersion(db, siteID, username) {
+async function getRemoteOfflineVersion(db, siteID, username) {
+    // Öncelik: site + kullanıcıya özel sürüm.
     const key = offlineVersionKey(siteID, username);
-    const snap = await get(child(ref(db), `${OFFLINE_VERSION_ROOT}/${key}`));
-    return snap.exists() ? String(snap.val()).trim() : null;
-}
-
-async function setOfflineVersion(db, siteID, username, version) {
-    const key = offlineVersionKey(siteID, username);
-    await set(ref(db, `${OFFLINE_VERSION_ROOT}/${key}`), String(version));
-    localStorage.setItem(offlineLocalMarkerKey(siteID, username), String(version));
+    try {
+        const exact = await get(child(ref(db), `${OFFLINE_VERSION_ROOT}/${key}`));
+        if (exact.exists() && (typeof exact.val() === 'string' || typeof exact.val() === 'number')) return String(exact.val()).trim();
+    } catch (_) {}
+    // Eski kurulumlarla uyumluluk: /offlineversiyon/{siteID}
+    try {
+        const site = await get(child(ref(db), `${OFFLINE_VERSION_ROOT}/${siteID}`));
+        if (site.exists() && (typeof site.val() === 'string' || typeof site.val() === 'number')) return String(site.val()).trim();
+    } catch (_) {}
+    // Tek sürümlü eski kurulum: /offlineversiyon = "v1"
+    try {
+        const root = await get(child(ref(db), OFFLINE_VERSION_ROOT));
+        if (root.exists() && (typeof root.val() === 'string' || typeof root.val() === 'number')) return String(root.val()).trim();
+    } catch (_) {}
+    return null;
 }
 
 async function preparePatrolBundle(app, db, auth, siteID, username, type, password) {
     if (type !== 'security') return true;
+    if (!siteID || !username) return false;
 
-    if (!siteID || !username) {
-        console.warn('[KOLART] Offline sürümü için siteID/güvenlik adı eksik.');
+    const remoteVersion = await getRemoteOfflineVersion(db, siteID, username);
+    if (!remoteVersion) {
+        console.error('[KOLART] Firebase offlineversiyon bulunamadı.');
         return false;
     }
 
-    const markerKey = offlineLocalMarkerKey(siteID, username);
-    const localVersion = localStorage.getItem(markerKey);
+    // IndexedDB'deki mevcut paketi yükle; böylece aynı sürümde tekrar indirme yapılmaz.
+    const existing = await window.KolartOffline.load(siteID, username);
+    const localVersion = existing ? window.KolartOffline.getLocalVersion() : '';
+    console.log('[KOLART] Offline sürüm:', {localVersion, remoteVersion});
 
-    // Firebase kaydı merkezde görünürlük / kayıt amacıyla okunur.
-    // Asıl cihaz kontrolü, telefondaki işaret ile uygulamanın mevcut
-    // OFFLINE_BUNDLE_VERSION değerinin karşılaştırılmasıdır.
-    const firebaseVersion = await getOfflineVersion(db, siteID, username);
-    console.log('[KOLART] Firebase offline sürümü:', firebaseVersion || '(yok)');
-
-    // Telefon zaten bu uygulama sürümünü hazırlamışsa HİÇBİR PAKET İNDİRME.
-    // Örn. telefon v1, kod v2 olduysa burada v1 !== v2 => yeni paket hazırlanır.
-    if (localVersion === OFFLINE_BUNDLE_VERSION) {
-        console.log('[KOLART] Offline paket zaten hazır:', OFFLINE_BUNDLE_VERSION);
+    // Aynı sürüm ve sağlam paket varsa hiçbir şey indirme.
+    if (localVersion === remoteVersion && existing && await window.KolartOffline.intact(existing)) {
+        console.log('[KOLART] Paket güncel:', remoteVersion);
         return true;
     }
 
-    // İlk kurulum veya uygulama sürümü değişikliği.
+    // Yeni sürüm geldi veya cihazda paket yok/bozuk.
+    console.log('[KOLART] Yeni offline paket hazırlanıyor:', localVersion || '(yok)', '=>', remoteVersion);
     if (!await finishOfflineUploads(app, db, auth, siteID)) return false;
 
-    const prepared = await window.KolartOffline.start({
-        app, db, auth, siteID, username, password, get, ref
+    const result = await window.KolartOffline.start({
+        app, db, auth, siteID, username, password, get, ref,
+        offlineVersion: remoteVersion
     });
 
-    if (!prepared) return false;
-
-    // Firebase:
-    // offlineversiyon/{siteID}__{GÜVENLİK ADI} = v1
-    // Örnek: offlineversiyon/1234__CEM GAZİ ARSLAN = v1
-    await setOfflineVersion(db, siteID, username, OFFLINE_BUNDLE_VERSION);
-
-    console.log('[KOLART] Yeni offline paket hazır:', OFFLINE_BUNDLE_VERSION);
-    return true;
+    // start() yalnızca paket tamamen kaydedilip doğrulanırsa sonuç döndürür.
+    return !!result;
 }
 // --- GÜVENLİK ANAHTARI ---
 const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
@@ -1245,27 +1207,12 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// INDEX SAYFASI İNTERNET OLMADAN DA AÇIK KALIR.
-// Sağ üstteki OFFLINE MOD butonu gerçek offline-devriye ekranına götürür.
-const offlineModeBtn = document.getElementById('offlineModeBtn');
-if (offlineModeBtn) {
-    offlineModeBtn.addEventListener('click', () => {
-        window.location.href = new URL('offline-devriye.html', location.href).href;
-    });
-}
-
 window.addEventListener('online', () => {
-    const m = document.getElementById('noInternetModal');
-    if (m) m.style.display = 'none';
+    const modal = document.getElementById('noInternetModal');
+    if (modal) modal.style.display = 'none';
 });
-
-window.addEventListener('offline', () => {
-    if (offlineModeBtn) offlineModeBtn.classList.add('offline-ready');
-});
-
-if (!navigator.onLine && offlineModeBtn) {
-    offlineModeBtn.classList.add('offline-ready');
-}
+// Ana giriş ekranı internet olsa da olmasa da index.html olarak kalır.
+// Çevrimdışı kullanım için sağ üstteki OFFLINE MOD düğmesi kullanılır.
 
 let deferredPrompt;
 const installBtn = document.getElementById('installBtn');
