@@ -9,7 +9,7 @@
   const safe = (v) => JSON.parse(JSON.stringify(v));
   let context, bundle, unsubscribe = [], running = false, lastJob = 0;
   const registration = 'serviceWorker' in navigator && window.isSecureContext
-    ? navigator.serviceWorker.register(new URL('sw.js', base), { scope: base.pathname })
+    ? navigator.serviceWorker.register(new URL('sw.js', base), { scope: base.pathname, updateViaCache:'none' })
     : Promise.reject(new Error('HTTPS ve Service Worker gerekli'));
   registration.catch(e => console.warn('[Offline paket]', e.message));
   const manifestURL = (s, u) => new URL(`__kolart_paket/${encodeURIComponent(s)}/${encodeURIComponent(u)}`, base).href;
@@ -63,7 +63,7 @@
     const response = await cache.match(manifestURL(siteID, username));
     if (!response) return null;
     const candidate = await response.json();
-    if (!candidate.complete || candidate.schema !== 2 || candidate.siteID !== siteID || candidate.username !== username) return null;
+    if (!candidate.complete || candidate.schema !== 3 || candidate.siteID !== siteID || candidate.username !== username) return null;
     if (!await caches.has(candidate.assetCache)) return null;
     const assets = await caches.open(candidate.assetCache);
     for (const url of candidate.requiredAssets) if (!await assets.match(url)) return null;
@@ -146,6 +146,12 @@
     if (!document.hidden && Date.now()-lastJob > 15000) void request();
   });
   window.KolartOffline = { start, load, last, remember, watchDynamic, profile,
+    async status() {
+      const cache = await caches.open(META);
+      const response = await cache.match(new URL('__kolart_paket_durumu',base).href);
+      const result = response ? await response.json() : null;
+      return result?.siteID === localStorage.getItem('siteID') ? result : null;
+    },
     get bundle() { return bundle; },
     read(path) { if (!bundle) throw new Error('Önce internetli girişte paket hazırlanmalıdır'); return snapshot(valueAt(path)); },
     request,
