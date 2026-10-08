@@ -1,605 +1,104 @@
-/* KOLART SERVICE WORKER - v6 */
-
+/* KOLART offline v4 — 20261008-2050. Firebase istekleri önbelleğe alınmaz. */
 'use strict';
+const BUILD = '20261008-2050';
+const BASE = new URL('./', self.location.href);
+const SHELL = 'kolart-offline-shell-v4-' + BUILD;
+const MARKER = new URL('__kolart_shell_v4', BASE).href;
+const FILES = ['offline-devriye.html', 'offline-devriye.js', 'offline-paket.js',
+  'offline-sync.js', 'vendor/html5-qrcode.min.js'];
+let preparing;
+self.addEventListener('install', e => e.waitUntil(self.skipWaiting()));
+self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 
-const BUILD = '20261008-2135-v6';
-
-const CACHE_NAME =
-    'kolart-offline-shell-v6-' + BUILD;
-
-const BASE =
-    self.registration.scope;
-
-const MARKER =
-    new URL(
-        '__kolart_shell_v6',
-        BASE
-    ).href;
-
-const FILES = [
-    'index.html',
-    'offline-devriye.html',
-    'offline-devriye.js',
-    'offline-paket.js',
-    'offline-sync.js',
-    'vendor/html5-qrcode.min.js',
-    'logo.png'
-];
-
-self.addEventListener(
-    'install',
-    event => {
-
-        /*
-         * Yeni Service Worker hemen aktif olsun.
-         */
-        self.skipWaiting();
-
-        /*
-         * Shell kurulumu burada zorunlu değil.
-         * Ana sayfa KOLART_SHELL_PREPARE mesajı
-         * gönderdiğinde hazırlanacak.
-         */
-    }
-);
-
-self.addEventListener(
-    'activate',
-    event => {
-
-        event.waitUntil(
-            (async () => {
-
-                /*
-                 * Eski KOLART cache'lerini temizle.
-                 */
-                const keys =
-                    await caches.keys();
-
-                await Promise.all(
-                    keys
-                        .filter(
-                            key =>
-                                key.startsWith(
-                                    'kolart-offline-shell-'
-                                ) &&
-                                key !== CACHE_NAME
-                        )
-                        .map(
-                            key =>
-                                caches.delete(key)
-                        )
-                );
-
-                await self.clients.claim();
-
-            })()
-        );
-    }
-);
-
-
-/*
- * Tek dosya indirme fonksiyonu.
- */
-async function fetchWithTimeout(
-    url,
-    timeout = 30000
-) {
-
-    const controller =
-        new AbortController();
-
-    const timer =
-        setTimeout(
-            () => controller.abort(),
-            timeout
-        );
-
+async function fetchTimed(request, milliseconds = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), milliseconds);
+  try { return await fetch(request, { cache: 'no-store', signal: controller.signal }); }
+  finally { clearTimeout(timer); }
+}
+async function shellReady() {
+  const cache = await caches.open(SHELL);
+  const marker = await cache.match(MARKER);
+  if (!marker) return false;
+  for (const file of FILES) if (!await cache.match(new URL(file, BASE).href)) return false;
+  return true;
+}
+async function prepareShell(progress) {
+  const cache = await caches.open(SHELL);
+  if (await shellReady()) return { build: BUILD, cacheName: SHELL, files: FILES };
+  await cache.delete(MARKER);
+  // HTML ve tarayıcı dosyaları aynı sürüm tamamlanmadan hazır sayılmaz.
+  const results = await Promise.allSettled(FILES.map(async (file, index) => {
+    progress({ file, done: index, total: FILES.length });
+    const url = new URL(file, BASE).href;
+    let response;
+    try { response = await fetchTimed(url, 25000); }
+    catch (_) { throw new Error(file + ' indirilemedi. Bağlantıyı ve dosyanın sunucuda bulunduğunu kontrol edin.'); }
+    if (!response.ok) throw new Error(file + ' indirilemedi (HTTP ' + response.status + ').');
+    const type = response.headers.get('Content-Type') || '';
+    if (file.endsWith('.js') && !/javascript|ecmascript|text\/plain/i.test(type))
+      throw new Error(file + ' yerine JavaScript olmayan bir dosya döndü.');
+    if (file === 'offline-devriye.html' && !(await response.clone().text()).includes('kolart-build:' + BUILD))
+      throw new Error('offline-devriye.html eski sürüm. ZIP içindeki dosyaları birlikte yükleyin.');
+    await cache.put(url, response);
+  }));
+  const failure = results.find(r => r.status === 'rejected');
+  if (failure) throw failure.reason;
+  await cache.put(MARKER, new Response(JSON.stringify({ build: BUILD, files: FILES }),
+    { headers: { 'Content-Type': 'application/json' } }));
+  return { build: BUILD, cacheName: SHELL, files: FILES };
+}
+self.addEventListener('message', e => {
+  const message = e.data;
+  if (!message || !['KOLART_SHELL_PREPARE', 'KOLART_SHELL_STATUS'].includes(message.type)) return;
+  const port = e.ports[0];
+  const reply = data => { if (port) port.postMessage(data); };
+  const work = (async () => {
     try {
-
-        const response =
-            await fetch(
-                url,
-                {
-                    cache: 'no-store',
-                    signal: controller.signal
-                }
-            );
-
-        if (!response.ok) {
-            throw new Error(
-                `${response.status} ${response.statusText}`
-            );
-        }
-
-        return response;
-
-    } finally {
-
-        clearTimeout(timer);
-    }
+      if (message.type === 'KOLART_SHELL_STATUS') {
+        reply({ ok: true, build: BUILD, ready: await shellReady() }); return;
+      }
+      await self.clients.claim();
+      if (!preparing) preparing = prepareShell(p => reply({ progress: p })).finally(() => { preparing = null; });
+      const shell = await preparing;
+      reply({ ok: true, ...shell });
+    } catch (error) { reply({ ok: false, build: BUILD, message: error.message }); }
+  })();
+  e.waitUntil(work);
+});
+function unavailable() {
+  return new Response('<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#080808;color:#fff;font:16px Arial;padding:40px 24px;text-align:center"><h2>Çevrimdışı hazırlık gerekli</h2><p>İnternet varken giriş yapıp “Çevrimdışı paket hazır” mesajını bekleyin.</p><a href="index.html" style="color:#ccff00">Giriş ekranına dön</a></body></html>',
+    { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
-
-
-/*
- * Offline shell hazırlanıyor.
- */
-async function prepareShell(
-    requestedBuild
-) {
-
-    if (
-        requestedBuild &&
-        requestedBuild !== BUILD
-    ) {
-
-        throw new Error(
-            `Build uyuşmuyor. SW=${BUILD}, İstenen=${requestedBuild}`
-        );
-    }
-
-    const cache =
-        await caches.open(CACHE_NAME);
-
-    const total =
-        FILES.length;
-
-    let completed = 0;
-
-    for (const file of FILES) {
-
-        const url =
-            new URL(
-                file,
-                BASE
-            ).href;
-
-        try {
-
-            const response =
-                await fetchWithTimeout(
-                    url,
-                    30000
-                );
-
-            await cache.put(
-                url,
-                response.clone()
-            );
-
-            completed++;
-
-            const percent =
-                55 +
-                Math.round(
-                    (completed / total) * 25
-                );
-
-            await broadcast({
-                type:
-                    'KOLART_SHELL_PROGRESS',
-
-                build:
-                    BUILD,
-
-                percent,
-
-                message:
-                    `Offline dosyası hazırlanıyor: ${file}`,
-
-                file,
-
-                completed,
-
-                total
-            });
-
-        } catch (error) {
-
-            console.error(
-                '[KOLART SW] Dosya alınamadı:',
-                file,
-                error
-            );
-
-            /*
-             * logo.png gibi opsiyonel dosyalarda
-             * tüm offline sistemi çökertme.
-             */
-            if (
-                file === 'logo.png'
-            ) {
-
-                completed++;
-
-                await broadcast({
-                    type:
-                        'KOLART_SHELL_PROGRESS',
-
-                    build:
-                        BUILD,
-
-                    percent:
-                        55 +
-                        Math.round(
-                            (completed / total) * 25
-                        ),
-
-                    message:
-                        `Opsiyonel dosya atlandı: ${file}`,
-
-                    file,
-
-                    completed,
-
-                    total
-                });
-
-                continue;
-            }
-
-            throw new Error(
-                `Offline dosyası alınamadı: ${file}`
-            );
-        }
-    }
-
-    /*
-     * Marker oluştur.
-     * Böylece shell gerçekten hazırlanmış oluyor.
-     */
-    await cache.put(
-        MARKER,
-        new Response(
-            JSON.stringify({
-                build: BUILD,
-                createdAt: Date.now()
-            }),
-            {
-                headers: {
-                    'Content-Type':
-                        'application/json'
-                }
-            }
-        )
-    );
-
-    await broadcast({
-        type:
-            'KOLART_SHELL_PROGRESS',
-
-        build:
-            BUILD,
-
-        percent:
-            80,
-
-        message:
-            'Offline dosyaları hazır.',
-
-        done:
-            false
-    });
-
-    return {
-        ok: true,
-        build: BUILD
-    };
-}
-
-
-/*
- * Tüm client'lara mesaj gönder.
- */
-async function broadcast(
-    message
-) {
-
-    const clients =
-        await self.clients.matchAll({
-            includeUncontrolled: true,
-            type: 'window'
-        });
-
-    for (const client of clients) {
-
-        client.postMessage(
-            message
-        );
-    }
-}
-
-
-/*
- * Ana sayfa ile mesajlaşma.
- */
-self.addEventListener(
-    'message',
-    event => {
-
-        const data =
-            event.data || {};
-
-        if (
-            data.type !==
-            'KOLART_SHELL_PREPARE'
-        ) {
-            return;
-        }
-
-        event.waitUntil(
-            (async () => {
-
-                try {
-
-                    const result =
-                        await prepareShell(
-                            data.build
-                        );
-
-                    await broadcast({
-
-                        type:
-                            'KOLART_SHELL_PROGRESS',
-
-                        build:
-                            BUILD,
-
-                        percent:
-                            80,
-
-                        message:
-                            'Offline shell hazır.',
-
-                        done:
-                            true,
-
-                        ok:
-                            true
-                    });
-
-                    /*
-                     * Mesajı gönderen client'a
-                     * ayrıca cevap ver.
-                     */
-                    if (
-                        event.source
-                    ) {
-
-                        event.source.postMessage({
-
-                            type:
-                                'KOLART_SHELL_PROGRESS',
-
-                            build:
-                                BUILD,
-
-                            percent:
-                                80,
-
-                            message:
-                                'Offline shell hazır.',
-
-                            done:
-                                true,
-
-                            ok:
-                                true
-                        });
-                    }
-
-                } catch (error) {
-
-                    console.error(
-                        '[KOLART SW] Shell hazırlama hatası:',
-                        error
-                    );
-
-                    const payload = {
-
-                        type:
-                            'KOLART_SHELL_PROGRESS',
-
-                        build:
-                            BUILD,
-
-                        percent:
-                            0,
-
-                        message:
-                            error?.message ||
-                            'Offline shell hazırlanamadı.',
-
-                        done:
-                            true,
-
-                        ok:
-                            false,
-
-                        error:
-                            error?.message ||
-                            'Bilinmeyen hata'
-                    };
-
-                    await broadcast(
-                        payload
-                    );
-
-                    if (
-                        event.source
-                    ) {
-                        event.source.postMessage(
-                            payload
-                        );
-                    }
-                }
-
-            })()
-        );
-    }
-);
-
-
-/*
- * FETCH
- *
- * Online:
- *   Önce internetten güncel dosyayı alır.
- *
- * Offline:
- *   Cache'den ilgili dosyayı verir.
- */
-self.addEventListener(
-    'fetch',
-    event => {
-
-        const request =
-            event.request;
-
-        if (
-            request.method !==
-            'GET'
-        ) {
-            return;
-        }
-
-        const url =
-            new URL(
-                request.url
-            );
-
-        /*
-         * Sadece kendi origin'imiz.
-         */
-        if (
-            url.origin !==
-            self.location.origin
-        ) {
-            return;
-        }
-
-        /*
-         * Service Worker kendi özel marker'ını
-         * network'e gönderme.
-         */
-        if (
-            url.href === MARKER
-        ) {
-            event.respondWith(
-                caches.match(
-                    url.href,
-                    {
-                        cacheName:
-                            CACHE_NAME
-                    }
-                )
-            );
-
-            return;
-        }
-
-        event.respondWith(
-            handleFetch(request)
-        );
-    }
-);
-
-
-async function handleFetch(
-    request
-) {
-
-    /*
-     * Önce network.
-     */
-    try {
-
-        const response =
-            await fetch(
-                request
-            );
-
-        /*
-         * Başarılı network cevabını
-         * cache'e yaz.
-         */
-        if (
-            response &&
-            response.ok
-        ) {
-
-            const cache =
-                await caches.open(
-                    CACHE_NAME
-                );
-
-            await cache.put(
-                request,
-                response.clone()
-            );
-        }
-
-        return response;
-
-    } catch (_) {
-
-        /*
-         * Network yoksa cache.
-         */
-        const cached =
-            await caches.match(
-                request,
-                {
-                    cacheName:
-                        CACHE_NAME
-                }
-            );
-
-        if (cached) {
-            return cached;
-        }
-
-        /*
-         * Navigation isteğinde index.html
-         * son çare olarak kullanılır.
-         */
-        if (
-            request.mode ===
-            'navigate'
-        ) {
-
-            const index =
-                await caches.match(
-                    new URL(
-                        'index.html',
-                        BASE
-                    ).href,
-                    {
-                        cacheName:
-                            CACHE_NAME
-                    }
-                );
-
-            if (index) {
-                return index;
-            }
-        }
-
-        /*
-         * Hiçbir şey yoksa basit offline cevap.
-         */
-        return new Response(
-            'Offline içerik bulunamadı.',
-            {
-                status: 503,
-                statusText:
-                    'Service Unavailable',
-                headers: {
-                    'Content-Type':
-                        'text/plain; charset=utf-8'
-                }
-            }
-        );
-    }
-);
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  if (url.origin !== BASE.origin || !url.pathname.startsWith(BASE.pathname)) return;
+  const relative = url.pathname.slice(BASE.pathname.length);
+  // GET dışındaki Firebase/Storage/Auth isteklerine müdahale edilmez.
+  if (e.request.mode === 'navigate') {
+    e.respondWith((async () => {
+      const cache = await caches.open(SHELL);
+      const offlineURL = new URL('offline-devriye.html', BASE).href;
+      if (relative === 'offline-devriye.html') {
+        const hit = await cache.match(offlineURL);
+        if (hit) return hit;
+        try { return await fetchTimed(e.request, 5000); } catch (_) { return unavailable(); }
+      }
+      // PWA start_url index, klasör adresi veya normal devriye ekranı olabilir.
+      const entry = ['', 'index.html', 'guvenlik.html', 'devriye.html', 'offline-index.html'].includes(relative);
+      if (entry && self.navigator.onLine === false) return Response.redirect(offlineURL, 302);
+      try { return await fetchTimed(e.request, 5000); }
+      catch (_) {
+        if (entry) return Response.redirect(offlineURL, 302);
+        const hit = await cache.match(url.href, { ignoreSearch: true });
+        return hit || unavailable();
+      }
+    })()); return;
+  }
+  if (!FILES.includes(relative)) return;
+  e.respondWith((async () => {
+    const hit = await (await caches.open(SHELL)).match(new URL(relative, BASE).href);
+    return hit || fetch(e.request);
+  })());
+});
