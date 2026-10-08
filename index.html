@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<script src="./offline-paket.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b1a27">
+<title>KOD Güvenlik Sistemleri - Giriş Paneli</title>
+
+<script>
+  const savedTheme = localStorage.getItem('kolart-theme-tone') || 'elite-neon';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+</script>
+
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="qr Devriye">
+
+<link rel="apple-touch-icon" sizes="57x57" href="apple-icon-57x57.png">
+<link rel="apple-touch-icon" sizes="60x60" href="apple-icon-60x60.png">
+<link rel="apple-touch-icon" sizes="72x72" href="apple-icon-72x72.png">
+<link rel="apple-touch-icon" sizes="76x76" href="apple-icon-76x76.png">
+<link rel="apple-touch-icon" sizes="114x114" href="apple-icon-114x114.png">
+<link rel="apple-touch-icon" sizes="120x120" href="icon-120.png">
+<link rel="apple-touch-icon" sizes="144x144" href="apple-icon-144x144.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icon-152.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+
+<meta name="msapplication-TileColor" content="#0a1a2e">
+<meta name="msapplication-TileImage" content="ms-icon-144x144.png">
+<meta name="theme-color" content="#0a1a2e">
+
+<style>
+/* --- SABİT DEĞERLER --- */
+:root {
+  color-scheme: dark;
+  --cga-text-main: #ffffff;
+  --cga-gold: #f1c40f; 
+  --cga-border-soft: rgba(255,255,255,0.08);
+}
+
+/* --- TEMA RENKLERİ --- */
+/* 1. Elite Neon (Varsayılan) */
+html[data-theme=elite-neon] {
+  --cga-bg-main: #000000;
+  --cga-bg-secondary: #080808;
+  --cga-neon: #CCFF00;
+  --cga-neon-dark: #b8e600;
+  --cga-card-bg: rgba(255,255,255,0.03);
+  --cga-glow: rgba(204, 255, 0, 0.08);
+  --cga-shadow: rgba(204, 255, 0, 0.4);
+}
+
+/* 2. Cyber Cyan Tema */
+html[data-theme=cyber-cyan] {
+  --cga-bg-main: #050A0C;
+  --cga-bg-secondary: #0A1013;
+  --cga-neon: #00E5FF;
+  --cga-neon-dark: #00b8cc;
+  --cga-card-bg: rgba(0, 229, 255, 0.05);
+  --cga-glow: rgba(0, 229, 255, 0.08);
+  --cga-shadow: rgba(0, 229, 255, 0.4);
+}
+
+/* 3. Hex Purple Tema */
+html[data-theme=hex-purple] {
+  --cga-bg-main: #08050a;
+  --cga-bg-secondary: #0c0a0e;
+  --cga-neon: #bd00ff;
+  --cga-neon-dark: #8a00cc;
+  --cga-card-bg: rgba(189, 0, 255, 0.05);
+  --cga-glow: rgba(189, 0, 255, 0.08);
+  --cga-shadow: rgba(189, 0, 255, 0.4);
+}
+
+/* 4. Deep Orange Tema */
+html[data-theme=deep-orange] {
+  --cga-bg-main: #0a0805;
+  --cga-bg-secondary: #0e0c0a;
+  --cga-neon: #ff5500;
+  --cga-neon-dark: #cc4400;
+  --cga-card-bg: rgba(255, 85, 0, 0.05);
+  --cga-glow: rgba(255, 85, 0, 0.08);
+  --cga-shadow: rgba(255, 85, 0, 0.4);
+}
+
+/* 5. Electric Blue Tema */
+html[data-theme=electric-blue] {
+  --cga-bg-main: #050608;
+  --cga-bg-secondary: #0a0b0d;
+  --cga-neon: #0066ff;
+  --cga-neon-dark: #004ecc;
+  --cga-card-bg: rgba(0, 102, 255, 0.05);
+  --cga-glow: rgba(0, 102, 255, 0.08);
+  --cga-shadow: rgba(0, 102, 255, 0.4);
+}
+
+/* 6. Matrix Green Tema */
+html[data-theme=matrix-green] {
+  --cga-bg-main: #050805;
+  --cga-bg-secondary: #0a0d0a;
+  --cga-neon: #00ff66;
+  --cga-neon-dark: #00cc52;
+  --cga-card-bg: rgba(0, 255, 102, 0.05);
+  --cga-glow: rgba(0, 255, 102, 0.08);
+  --cga-shadow: rgba(0, 255, 102, 0.4);
+}
+
+/* 7. Ruby Red Tema */
+html[data-theme=ruby-red] {
+  --cga-bg-main: #080506;
+  --cga-bg-secondary: #0d0a0b;
+  --cga-neon: #ff0055;
+  --cga-neon-dark: #cc0044;
+  --cga-card-bg: rgba(255, 0, 85, 0.05);
+  --cga-glow: rgba(255, 0, 85, 0.08);
+  --cga-shadow: rgba(255, 0, 85, 0.4);
+}
+
+/* --- GENEL YAPISAL STİLLER --- */
+html, body {
+  margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+  font-family: 'Montserrat', sans-serif;
+  display: flex; justify-content: center; align-items: center;
+  /* Arkaplan parlaması dinamik değişkene bağlandı */
+  background: radial-gradient(circle at top, var(--cga-glow), transparent 40%),
+              linear-gradient(135deg, var(--cga-bg-main), var(--cga-bg-secondary));
+  color: var(--cga-text-main);
+  -webkit-touch-callout: none;
+  transition: background 0.3s ease;
+}
+
+.container {
+  width: 380px;
+  padding: 40px 30px 70px;
+  border-radius: 26px;
+  background: var(--cga-card-bg);
+  backdrop-filter: blur(22px);
+  box-shadow: 0 0 0 1px var(--cga-border-soft), 0 20px 50px rgba(0,0,0,0.7);
+  text-align: center;
+  transform: translateY(-20px);
+  transition: background 0.3s ease;
+}
+
+h1 { font-size:26px; font-weight:800; color: var(--cga-gold); margin-bottom:8px; cursor:pointer; }
+
+.site-name{
+  display:none; font-size:28px; font-weight:800; letter-spacing:1px; margin:1px 0 18px;
+  color: var(--cga-neon); 
+  text-shadow: 0 0 10px var(--cga-shadow), 0 0 25px var(--cga-glow);
+  transition: color 0.3s ease;
+}
+
+.input-group { display:none; flex-direction:column; text-align:left; margin-bottom:28px; }
+.input-group.active { display:flex; }
+
+input[type="text"], input[type="password"] { width:100%; padding:12px; margin:8px 0; border-radius:12px; border:none; background: rgba(255,255,255,0.1); color:white; font-size:14px;}
+input::placeholder { color: rgba(236,240,241,0.6); }
+
+.remember {display:flex; align-items:center; gap:8px; font-size:14px; margin-top:8px;}
+.remember input[type="checkbox"] { cursor:pointer; accent-color: var(--cga-neon); }
+.remember label { cursor:pointer; color:#fff; }
+
+.loginBtn {
+  width: 150px;
+  padding: 13px;
+  border: none;
+  border-radius: 16px;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  margin-bottom: 0;
+  background: linear-gradient(90deg, var(--cga-neon-dark), var(--cga-neon));
+  box-shadow: 0 6px 20px var(--cga-shadow);
+  transition: 0.25s;
+  color: #000;
+}
+.loginBtn:hover {
+  background: linear-gradient(90deg, var(--cga-neon), var(--cga-neon-dark));
+  transform: translateY(-2px) scale(1.05);
+}
+
+.message {
+  margin-top:15px;
+  margin-bottom:40px;
+  color:#e74c3c;
+  font-weight:600;
+  text-align:center;
+  min-height:20px;
+}
+
+.cga-logo { 
+  width: 220px; 
+  max-width: 70%; 
+  display: block; 
+  margin: 55px auto 0; 
+  filter: drop-shadow(0 0 12px rgba(241, 196, 15, 0.15));
+}
+
+/* --- YENİ NESİL ALT İMZA (FOOTER) --- */
+.corner-bottom {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 25px;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(5px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  color: rgba(241, 196, 15, 0.7);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  text-transform: uppercase;
+  user-select: none;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.corner-bottom span {
+  color: #f1c40f;
+  text-shadow: 0 0 8px rgba(241, 196, 15, 0.3);
+  margin: 0 4px;
+}
+.corner-top {
+  position: fixed;
+  top: 10px;
+  right: 14px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--cga-gold); 
+  opacity: 1; 
+  text-shadow: 0 0 5px rgba(241, 196, 15, 0.4);
+  user-select: none;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.securityText{
+  font-size:16px; font-weight:700; color: var(--cga-gold); margin-bottom:20px; cursor:pointer; text-align:center;
+  padding:8px 0; letter-spacing:0.5px; transition:0.25s;
+}
+.securityText:hover{ transform: scale(1.06); color:#f7d35e; }
+
+#qr-reader {
+  width: 95vw;
+  height: 70vh;
+  max-width: 600px;
+  max-height: 600px;
+  margin: auto;
+  border-radius: 12px;
+  background: #000;
+}
+
+.modal-content { max-width: 95%; }
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal.hidden { display: none; }
+
+.modal-box {
+  background: #1e1e1e;
+  padding: 20px;
+  border-radius: 12px;
+  width: 85%;
+  max-width: 320px;
+  text-align: center;
+  color: #fff;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.modal-actions button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+#cancelDisconnect { background: #555; color: #fff; }
+#confirmDisconnect { background: #e74c3c; color: #fff; }
+
+.disconnect-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.disconnect-modal.hidden { display: none; }
+
+* { -webkit-user-select: none; -ms-user-select: none; user-select: none; }
+input, textarea {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default;
+  pointer-events: auto;
+}
+
+.choiceBtn {
+  flex:1;
+  border:none;
+  border-radius:10px;
+  font-weight:700;
+  cursor:pointer;
+  background: rgba(255,255,255,0.1);
+  color:#fff;
+  transition:0.25s;
+}
+.choiceBtn:hover { background: var(--cga-glow); transform: scale(1.05); }
+.choiceBtn.active { background: linear-gradient(90deg, var(--cga-neon-dark), var(--cga-neon)); color:#000; }
+
+.modal { position: fixed; inset:0; background: rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:9999; transition:0.3s; }
+.modal.hidden { display:none; }
+.modal-box { background:#1e1e1e; border-radius:12px; color:#fff; }
+
+/* GİRİŞ YAP BUTONU */
+#secLoginBtn {
+    width: 80%;
+    max-width: 280px;
+    padding: 16px 0;
+    margin: 25px auto 0;
+    display: block;
+    
+    font-size: 18px;
+    font-weight: 900; 
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-family: 'Montserrat', sans-serif;
+    
+    background-color: var(--cga-neon); 
+    color: #000000; 
+    border-radius: 20px;
+    border: none;
+    cursor: pointer;
+    
+    box-shadow: 0 0 15px var(--cga-shadow), 0 10px 30px rgba(0, 0, 0, 0.5);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+}
+
+#secLoginBtn:hover {
+    transform: translateY(-4px) scale(1.02);
+    background-color: var(--cga-neon-dark); 
+    box-shadow: 0 0 25px var(--cga-shadow), 0 15px 40px rgba(0, 0, 0, 0.6);
+}
+
+#secLoginBtn:active {
+    transform: scale(0.96);
+    box-shadow: 0 0 10px var(--cga-shadow);
+}
+
+#secLoginBtn::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -60%;
+    width: 20%;
+    height: 200%;
+    background: rgba(255, 255, 255, 0.4);
+    transform: rotate(30deg);
+    transition: all 0.6s;
+    opacity: 0.1;
+}
+
+#secLoginBtn:hover::after {
+    left: 120%;
+}
+
+#secLoginBtn:disabled {
+    background: #1a1a1a !important;
+    color: #444 !important;
+    box-shadow: none !important;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* --- HAVALI DÖNEN DESTEK PANELİ --- */
+.support-wrapper {
+  position: fixed;
+  bottom: 30px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 15px;
+  pointer-events: none; 
+}
+
+.support-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  opacity: 0;
+  transform: translateY(20px) scale(0) rotate(-180deg);
+  transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  pointer-events: none;
+}
+
+.support-wrapper.active .support-item {
+  opacity: 1;
+  transform: translateY(0) scale(1) rotate(0deg);
+  pointer-events: auto;
+}
+
+.support-label {
+  background: rgba(11, 26, 39, 0.9);
+  color: #f1c40f;
+  padding: 5px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  border: 1px solid rgba(241, 196, 15, 0.3);
+}
+
+.support-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+  color: white;
+}
+
+.btn-whatsapp-icon { background: #25D366; }
+.btn-call-icon { background: #3498db; }
+
+.main-support-btn {
+  width: 65px;
+  height: 65px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f1c40f, #d4ac0d);
+  color: #0b1a27;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 9px;
+  box-shadow: 0 8px 25px rgba(241, 196, 15, 0.5);
+  transition: 0.4s;
+  pointer-events: auto;
+}
+
+.main-support-btn span.emoji { font-size: 24px; margin-bottom: -2px; }
+
+.support-wrapper.active .main-support-btn {
+  transform: rotate(135deg);
+  background: #e74c3c;
+  color: #fff;
+}
+
+/* Şifre kutusunun konumunu ayarla */
+.password-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* Göz ikonunun stili - Renk temaya bağlandı */
+.toggle-password {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: var(--cga-neon);
+  font-size: 18px;
+  z-index: 10;
+  user-select: none;
+  transition: color 0.3s ease;
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <img src="logo.png" class="cga-logo" alt="CGA Logo">
+
+    <div id="qrButtonsWrapper" style="display:flex; gap:8px; justify-content:center; align-items:center; background: rgba(255,255,255,0.05); padding:6px 8px; border-radius:12px; max-width:300px; margin:auto;">
+        <button id="startQR" class="choiceBtn active" style="font-size:14px; padding:6px 10px;">📷 QR Kodu Okut</button>
+        <button id="enterCode" class="choiceBtn" style="font-size:14px; padding:6px 10px;">⌨️ Kod Gir</button>
+    </div>
+
+    <div style="margin-top:10px; text-align:center;">
+        <div id="siteName" class="site-name" style="font-size:24px;"></div>
+        <div id="qrMessage" style="margin-top:4px; color:#f1c40f; font-size:14px;"></div>
+    </div>
+
+    <div id="codeModal" class="modal hidden">
+        <div class="modal-box" style="padding:20px; max-width:300px; text-align:center;">
+            <h3 style="margin-bottom:12px; color:#f1c40f;">Site Kodunu Gir</h3>
+            <input id="codeInput" type="text" maxlength="4" placeholder="0000" style="width:60%; padding:8px; border-radius:8px; border:none; text-align:center; font-size:16px; margin-bottom: 15px;">
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <button id="codeCancel" class="loginBtn" style="padding:6px 12px; font-size:14px; background: #7f8c8d; color: white; box-shadow: none;">İptal</button>
+                <button id="codeConfirm" class="loginBtn" style="padding:6px 12px; font-size:14px;">Onayla</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="qrModal" class="modal hidden">
+        <div class="modal-content">
+            <div id="qr-reader"></div>
+            <button id="closeQRModal" class="loginBtn" style="background:#e74c3c; color:white; box-shadow:none;">Kapat</button>
+        </div>
+    </div>
+
+    <div class="securityText" id="securityBtn">🔐 Güvenlik Girişi</div>
+
+    <div id="securityGroup" class="input-group active">
+        <input type="text" id="secUsername" placeholder="Ad Soyad">
+        <input type="password" id="secPassword" placeholder="Şifre">
+        <div class="remember">
+            <input type="checkbox" id="secRemember">
+            <label for="secRemember">Kullanıcıyı hatırla</label>
+        </div>
+        <button class="loginBtn" id="secLoginBtn">Giriş Yap</button>
+    </div>
+
+    <div class="message" id="message"></div>
+</div>
+
+<div class="corner-bottom">© 2026 CGA Güvenlik Sistemleri</div>
+<div class="corner-top">v1.2.1</div>
+
+<button id="installBtn" class="install-btn" style="position: fixed; top: 12px; left: 12px; display:none; z-index:500;">📲 Uygulamayı Yükle</button>
+
+<div id="authErrorModal" style="display:none; position:fixed; inset:0; z-index:100010; background:rgba(0,0,0,0.85); backdrop-filter:blur(10px); align-items:center; justify-content:center;">
+    <div style="background:rgba(15, 15, 15, 0.95); padding:30px; border-radius:20px; width:90%; max-width:340px; text-align:center; border:1px solid #e74c3c; box-shadow:0 10px 40px rgba(231, 76, 60, 0.3);">
+        <div style="font-size: 40px; margin-bottom: 10px;">⚠️</div>
+        <h3 style="color:#e74c3c; margin-top:0; margin-bottom:12px; font-size:20px; font-weight: 800;">Giriş Başarısız</h3>
+        <p id="authErrorText" style="color:#ecf0f1; font-size:14px; line-height:1.6; margin-bottom:25px;">Hata mesajı buraya gelecek.</p>
+        <button onclick="document.getElementById('authErrorModal').style.display='none'" style="width:100%; padding:14px; font-size:15px; font-weight:700; background:rgba(231, 76, 60, 0.15); color:#e74c3c; border:1px solid #e74c3c; border-radius:12px; cursor:pointer; transition: 0.2s;">
+            Tekrar Dene
+        </button>
+    </div>
+</div>
+
+<div id="disconnectModal" class="modal hidden disconnect-modal">
+    <div class="modal-box">
+        <p>Proje bağlantısından ayrılmak istiyor musunuz?</p>
+        <div class="modal-actions">
+            <button id="cancelDisconnect">İptal</button>
+            <button id="confirmDisconnect">Ayrıl</button>
+        </div>
+    </div>
+</div>
+
+<div id="noProjectModal" class="modal hidden" style="position:fixed; inset:0; background:rgba(11,26,39,0.9); z-index:100005; display:none; align-items:center; justify-content:center;">
+    <div class="modal-box" style="background:rgba(255,255,255,0.06); backdrop-filter:blur(22px); padding:35px 25px; border-radius:24px; width:90%; max-width:380px; text-align:center; border:1px solid rgba(255,255,255,0.1); box-shadow:0 25px 60px rgba(0,0,0,0.6);">
+        <div style="font-size: 45px; margin-bottom: 15px;">⚠️</div>
+        <h3 style="color:#f1c40f; margin-bottom:12px; font-size:22px; font-weight:800; letter-spacing:0.5px;">Proje Bağlantısı Bulunamadı</h3>
+        <p style="color:#ecf0f1; font-size:14px; line-height:1.6; margin-bottom:25px; text-align:center; opacity:0.9;">
+            Sisteme giriş yapmak için size verilen <strong style="color:#fff;">4 haneli proje kodunu</strong> girmelisiniz.<br><br>
+            Eğer kodunuzu bilmiyorsanız, aşağıdaki <strong>Destek Al</strong> butonuna tıklayarak WhatsApp üzerinden hızlıca talep edebilirsiniz.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:12px; width: 100%;">
+            <button id="noProjectEnterCodeBtn" style="width:100%; padding:15px; font-size:15px; background:linear-gradient(135deg, #f1c40f, #f39c12); color:#0b1a27; font-weight:800; border:none; border-radius:14px; cursor:pointer; box-shadow:0 6px 20px rgba(241,196,15,0.25); display:flex; justify-content:center; align-items:center; gap:8px;">
+                ⌨️ ŞİMDİ KODU GİR
+            </button>
+            <div style="display:flex; gap:12px; width:100%;">
+                <a href="whatsapp://send?phone=905537074882&text=Merhaba,%20sistemde%20proje%20bağlantım%20koptu.%204%20haneli%20proje%20kodumu%20öğrenebilir%20miyim?%0A%0A%E2%9A%A0%EF%B8%8F%20L%C3%BCtfen%20a%C5%9Fa%C4%9F%C4%B1daki%20bilgileri%20doldurun:%0A%F0%9F%91%A4%20Ad%20Soyad:%20%0A%F0%9F%8F%A2%20Proje/Site%20Ad%C4%B1:%20" style="flex:1; text-decoration:none; display:flex;">
+                    <button type="button" style="width:100%; padding:14px; font-size:14px; background:linear-gradient(135deg, #2ecc71, #27ae60); color:#fff; border:none; border-radius:14px; cursor:pointer; font-weight:700; display:flex; justify-content:center; align-items:center; gap:6px; box-shadow:0 6px 20px rgba(46,204,113,0.25);">
+                        🛠️ Destek Al
+                    </button>
+                </a>
+                <button id="noProjectCloseBtn" style="flex:1; padding:14px; font-size:14px; background:rgba(255,255,255,0.05); color:#ecf0f1; border:1px solid rgba(255,255,255,0.1); border-radius:14px; cursor:pointer; font-weight:600;">
+                    Kapat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="noInternetModal" style="display:none; position:fixed; inset:0; z-index:999999; background:rgba(0,0,0,0.85); backdrop-filter:blur(10px); align-items:center; justify-content:center;">
+    <div style="background:#1c2e3f; padding:40px; border-radius:24px; width:85%; max-width:350px; text-align:center; border:1px solid #e74c3c; box-shadow:0 0 40px rgba(231,76,60,0.3);">
+        <div style="font-size:50px; margin-bottom:15px;">🌐</div>
+        <h2 style="color:#fff; margin-bottom:10px;">Bağlantı Yok!</h2>
+        <p style="color:#bdc3c7; font-size:14px; line-height:1.5;">İnternet bağlantınızı algılayamadık. Lütfen internet ayarlarınızı kontrol edin ve tekrar deneyin.</p>
+    </div>
+</div>
+
+<div id="loginStatusModal" style="display:none; position:fixed; inset:0; background:rgba(11,26,39,0.9); z-index:100006; align-items:center; justify-content:center;">
+    <div style="background:rgba(255,255,255,0.06); backdrop-filter:blur(22px); padding:40px; border-radius:24px; width:80%; max-width:300px; text-align:center; border:1px solid rgba(255,255,255,0.1);">
+        <h3 id="loginStatusText" style="color:#fff; font-size:16px;">Giriş yapılıyor...</h3>
+    </div>
+</div>
+
+<div class="support-wrapper" id="supportWrapper">
+    <a href="whatsapp://send?phone=905537074882&text=Merhaba, teknik desteğe ihtiyacım var." class="support-item">
+        <span class="support-label">WhatsApp Mesaj</span>
+        <div class="support-icon btn-whatsapp-icon">
+            <img src="https://cdn-icons-png.flaticon.com/512/733/733585.png" width="26" alt="WA">
+        </div>
+    </a>
+    <a href="tel:+905537074882" class="support-item">
+        <span class="support-label">Hemen Ara</span>
+        <div class="support-icon btn-call-icon">📞</div>
+    </a>
+    <button class="main-support-btn" onclick="toggleSupport()">
+        <span class="emoji">🛠️</span>
+        <span>DESTEK</span>
+    </button>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+<script type="module">
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import { getDatabase, ref, get, child, update, onValue } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+import { getAuth, signInWithEmailAndPassword, updatePassword } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+
+// --- GÜVENLİK ANAHTARI ---
+const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
+const encryptData = (data) => CryptoJS.AES.encrypt(JSON.stringify(data), CONFIG_KEY).toString();
+const decryptData = (encrypted) => {
+    try {
+        const bytes = CryptoJS.AES.decrypt(encrypted, CONFIG_KEY);
+        return JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
+    } catch (e) { return null; }
+};
+
+// MERKEZ FIREBASE
+const merkezConfig = {
+  apiKey: "AIzaSyDCJWz80wWlzNhaM2Qnw_e5UkQoc8DoJaU",
+  authDomain: "merkez-14bf8.firebaseapp.com",
+  databaseURL: "https://merkez-14bf8-default-rtdb.firebaseio.com", 
+  projectId: "merkez-14bf8",
+  storageBucket: "merkez-14bf8.firebasestorage.app",
+  messagingSenderId: "512943111807",
+  appId: "1:512943111807:web:675c769c7ede48216e494a",
+  measurementId: "G-BYS8FPKY7H"
+};
+const merkezApp = getApps().find(a => a.name === "[DEFAULT]") || initializeApp(merkezConfig);
+const merkezDB = getDatabase(merkezApp);
+
+// --- ŞİFRE MASKELER ---
+const maskPass = (p) => btoa("SAD1SJ" + p.substring(0, 2) + "L2LSJDF3JDFL" + p.substring(2) + "L6LSJDFL7");
+const unmaskPass = (m) => {
+    try {
+        let d = atob(m);
+        return d.replace("SAD1SJ", "").replace("L2LSJDF3JDFL", "").replace("L6LSJDFL7", "");
+    } catch (e) { return ""; }
+};
+
+// DOM Elementleri
+const siteNameEl = document.getElementById("siteName");
+const securityBtn = document.getElementById("securityBtn");
+const securityGroup = document.getElementById("securityGroup");
+const msg = document.getElementById("message");
+const secUsername = document.getElementById("secUsername");
+const secPassword = document.getElementById("secPassword");
+const secRemember = document.getElementById("secRemember");
+
+const qrBtn = document.getElementById("startQR");
+const codeBtn = document.getElementById("enterCode");
+const codeModal = document.getElementById("codeModal");
+const codeInput = document.getElementById("codeInput");
+const codeCancel = document.getElementById("codeCancel");
+const codeConfirm = document.getElementById("codeConfirm");
+const qrModal = document.getElementById("qrModal");
+const closeQRModal = document.getElementById("closeQRModal");
+let qrReader = null;
+
+const modal = document.getElementById("disconnectModal");
+const cancelBtn = document.getElementById("cancelDisconnect");
+const confirmBtn = document.getElementById("confirmDisconnect");
+
+const noProjectModal = document.getElementById("noProjectModal");
+const noProjectCloseBtn = document.getElementById("noProjectCloseBtn");
+const noProjectEnterCodeBtn = document.getElementById("noProjectEnterCodeBtn");
+
+noProjectCloseBtn.addEventListener("click", () => {
+    noProjectModal.style.display = "none";
+});
+
+noProjectEnterCodeBtn.addEventListener("click", () => {
+    noProjectModal.style.display = "none"; 
+    setActive(codeBtn);
+    codeModal.classList.remove("hidden"); 
+    codeInput.value = "";
+    codeInput.focus();
+});
+
+let pressTimer;
+
+// DÜZELTME 1: Tamamen orijinal fonksiyona dönüldü, veri tabanındaki bozuk kayıtlarla tam eşleşmesi için.
+function formatToEmail(name) {
+    let text = name.trim().toLowerCase();
+    const mapping = {
+        'ç': 'c', 'ğ': 'g', 'ı': 'i', 'i': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u'
+    };
+    Object.keys(mapping).forEach(key => {
+        text = text.replace(new RegExp(key, 'g'), mapping[key]);
+    });
+    return text.replace(/\s+/g, '') + "@cga.com";
+}
+
+window.togglePass = (id) => {
+    const input = document.getElementById(id);
+    input.type = input.type === "password" ? "text" : "password";
+};
+
+async function forcePasswordChange(username, type, activeDB, auth, reason) {
+    const modalHtml = `
+        <div id="fMod" style="position:fixed; inset:0; background:#0b1a27; z-index:100000; display:flex; align-items:center; justify-content:center; font-family:'Montserrat', sans-serif;">
+            <div style="background:rgba(255,255,255,0.06); backdrop-filter:blur(22px); padding:40px; border-radius:26px; width:90%; max-width:380px; text-align:center; border:1px solid rgba(255,255,255,0.1); box-shadow:0 20px 50px rgba(0,0,0,0.7);">
+                <h2 style="color:#f1c40f; margin-bottom:15px;">🔐 Şifre Standartı</h2>
+                <p style="color:#ecf0f1; font-size:14px; margin-bottom:25px; line-height:1.5;">${reason}</p>
+                <div style="position:relative; margin-bottom:12px;">
+                    <input type="password" id="f_p1" placeholder="Yeni Şifre (6 Hane)" maxlength="6" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')" style="width:100%; padding:15px; border-radius:12px; border:none; background:rgba(255,255,255,0.1); color:white; text-align:center; font-size:18px;">
+                    <button type="button" onclick="togglePass('f_p1')" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:#f1c40f; cursor:pointer; font-size:20px;">🙈</button>
+                </div>
+                <div style="position:relative; margin-bottom:12px;">
+                    <input type="password" id="f_p2" placeholder="Şifre Tekrar" maxlength="6" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')" style="width:100%; padding:15px; border-radius:12px; border:none; background:rgba(255,255,255,0.1); color:white; text-align:center; font-size:18px;">
+                    <button type="button" onclick="togglePass('f_p2')" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:#f1c40f; cursor:pointer; font-size:20px;">🙈</button>
+                </div>
+                <div id="f_err" style="color:#e74c3c; font-weight:600; font-size:13px; margin-bottom:20px; min-height:18px;"></div>
+                <button id="f_btn" style="width:100%; padding:15px; border-radius:16px; background:linear-gradient(90deg, #27ae60, #2ecc71); color:white; font-weight:800; border:none; cursor:pointer;">GÜNCELLE VE GİRİŞ YAP</button>
+            </div>
+        </div>`;
+    document.body.insertAdjacentHTML('afterbegin', modalHtml);
+
+    document.getElementById('f_btn').onclick = async function() {
+        const p1 = document.getElementById('f_p1').value.trim();
+        const p2 = document.getElementById('f_p2').value.trim();
+        const err = document.getElementById('f_err');
+
+        if(p1.length !== 6) { err.innerText = "ŞİFRE 6 HANELİ OLMALI!"; return; }
+        if(!/^\d+$/.test(p1)) { err.innerText = "ŞİFRE SADECE RAKAMLARDAN OLUŞMALIDIR!"; return; }
+        if(p1 !== p2) { err.innerText = "ŞİFRELER UYUŞMUYOR!"; return; }
+        if(p1 === "123456") { err.innerText = "LÜTFEN BAŞKA BİR ŞİFRE SEÇİN!"; return; }
+
+        this.disabled = true; this.innerText = "GÜNCELLENİYOR...";
+
+        try {
+            if (auth.currentUser) {
+                await updatePassword(auth.currentUser, p1);
+            } else {
+                throw new Error("Kullanıcı oturumu koptu, tekrar giriş yapın!");
+            }
+
+            await update(ref(activeDB, 'users/' + username), { password: p1 });
+
+            const stored = localStorage.getItem("securityUser");
+            if (stored && JSON.parse(stored).username === username) {
+                localStorage.setItem("securityUser", JSON.stringify({ username, password: maskPass(p1) }));
+            }
+            sessionStorage.setItem("currentUser", JSON.stringify({username, type}));
+            
+            // Tüm gereksiz yetki yönlendirmeleri kaldırıldı, sadece güvenliğe atar
+           // Tüm gereksiz yetki yönlendirmeleri kaldırıldı, sadece güvenlik (veya amir) sayfasına atar
+            if (type === "amir") {
+                window.location.href = "amir.html";
+            } else {
+                window.location.href = "guvenlik.html";
+            }
+            
+        } catch (e) { 
+            console.error(e);
+            err.innerText = "HATA: GÜNCELLEME YAPILAMADI!"; 
+            this.disabled = false; 
+            this.innerText = "GÜNCELLE VE GİRİŞ YAP"; 
+        }
+    };
+}
+
+function hideQRButtons(){
+  qrBtn.style.display="none";
+  codeBtn.style.display="none";
+  const wrapper = document.getElementById("qrButtonsWrapper");
+  if(wrapper) wrapper.style.display = "none"; 
+}
+
+function showQRButtons(){
+  qrBtn.style.display="flex";
+  codeBtn.style.display="flex";
+  const wrapper = document.getElementById("qrButtonsWrapper");
+  if(wrapper) wrapper.style.display = "flex"; 
+}
+
+window.addEventListener("load", async ()=>{
+  if(securityBtn) securityBtn.click();
+  const secStored = JSON.parse(localStorage.getItem("securityUser"));
+  if(secStored){ 
+    secUsername.value = secStored.username; 
+    secPassword.value = unmaskPass(secStored.password);
+    secRemember.checked = true; 
+  }
+  const savedSiteID = localStorage.getItem("siteID");
+  const savedConfigEnc = localStorage.getItem("siteConfig");
+  if(savedSiteID && savedConfigEnc){
+    const siteConfig = decryptData(savedConfigEnc); 
+    if(siteConfig) {
+      let siteApp = getApps().find(a => a.name === `siteApp-${savedSiteID}`);
+      if(!siteApp) siteApp = initializeApp(siteConfig, `siteApp-${savedSiteID}`);
+      const siteDB = getDatabase(siteApp);
+      hideQRButtons();
+      await loadSiteName(siteDB);
+    } else {
+      showQRButtons();
+    }
+  }
+});
+
+async function loginUser(rawUsername, password, role) {
+    const cleanUsername = rawUsername.trim();
+    const cleanPassword = password.trim();
+    const dbUsername = cleanUsername.toLocaleUpperCase('tr-TR');
+    const loginBtn = document.getElementById("secLoginBtn");
+    
+    const statusModal = document.getElementById("loginStatusModal");
+    const statusText = document.getElementById("loginStatusText");
+
+    msg.textContent = "";
+
+    const savedEnc = localStorage.getItem("siteConfig");
+    const siteConfig = savedEnc ? decryptData(savedEnc) : null;
+
+    if (!siteConfig) {
+        loginBtn.disabled = false;
+        loginBtn.style.opacity = "1";
+        noProjectModal.style.display = "flex";
+        return;
+    }
+
+    const showErrorModal = (hataMesaji) => {
+        if (statusModal) statusModal.style.display = "none";
+        const errorModal = document.getElementById('authErrorModal');
+        const errorTextEl = document.getElementById('authErrorText');
+        if (errorModal && errorTextEl) {
+            errorTextEl.innerHTML = hataMesaji;
+            errorModal.style.display = 'flex';
+        } else {
+            msg.style.color = "#e74c3c";
+            msg.textContent = hataMesaji;
+        }
+        loginBtn.disabled = false;
+        loginBtn.style.opacity = "1";
+    };
+
+    if (!cleanUsername || !cleanPassword) {
+        return showErrorModal("Ad Soyad ve şifre gerekli!");
+    }
+
+    if (statusModal) {
+        statusModal.style.display = "flex";
+        statusText.textContent = "⌛ Bilgileriniz kontrol ediliyor...";
+    }
+
+    loginBtn.disabled = true;
+    loginBtn.style.opacity = "0.7";
+
+    try {
+        const siteId = localStorage.getItem("siteID");
+        let app = getApps().find(a => a.name === `siteApp-${siteId}`);
+        if (!app) app = initializeApp(siteConfig, `siteApp-${siteId}`);
+
+        const activeDB = getDatabase(app);
+        const auth = getAuth(app);
+
+        const targetEmail = formatToEmail(cleanUsername);
+        
+       let authSuccess = false;
+try {
+    await signInWithEmailAndPassword(auth, targetEmail, cleanPassword);
+    authSuccess = true;
+    // Giriş/yönlendirme paketin indirilmesini beklemez. Worker sayfadan ayrılınca da işi sürdürür.
+    void window.KolartOffline?.start({ db: activeDB, auth, siteID: siteId, username: dbUsername,
+        databaseURL: siteConfig.databaseURL, onValue, ref }).catch(e => console.warn('[Offline paket]', e.message));
+    if (statusText) statusText.textContent = "✅ Bilgileriniz onaylandı, yönlendiriliyorsunuz...";
+} catch (authErr) {
+    // İnternet hatası kaldırıldı, sadece kullanıcı yok veya şifre hatalı uyarısı bırakıldı
+    return showErrorModal("❌ Kullanıcı kaydı bulunamadı veya şifre hatalı!");
+}
+
+   // DESTEK PERSONEL KONTROLÜ (ŞİFRELİ)
+        if (dbUsername === "DESTEK PERSONEL") {
+            const dSnap = await get(child(ref(activeDB), 'users/' + dbUsername));
+            if (dSnap.exists()) {
+                // ŞİFREYİ BURADA KONTROL EDİYORUZ
+                if (cleanPassword === String(dSnap.val().password).trim()) {
+                    sessionStorage.setItem("currentUser", JSON.stringify({ username: dbUsername, type: dSnap.val().type }));
+                    
+                    // ---> BENİ HATIRLA EKLENTİSİ BURADA BAŞLIYOR <---
+                    if (secRemember.checked) {
+                        localStorage.setItem("securityUser", JSON.stringify({ username: cleanUsername, password: maskPass(cleanPassword) }));
+                    } else {
+                        localStorage.removeItem("securityUser");
+                    }
+                    // ---> BENİ HATIRLA EKLENTİSİ BURADA BİTİYOR <---
+
+                    window.location.href = "guvenlik.html"; // Sadece güvenlik sayfasına yönlendiriyor
+                    return;
+                } else {
+                    return showErrorModal("❌ Destek Personeli Şifresi Hatalı!");
+                }
+            }
+        }
+
+        // DÜZELTME 3: Eğer Admin/Destek değilse ve Auth'tan geçemediyse ŞİMDİ bloke et!
+        if (!authSuccess) {
+            return showErrorModal("❌ AUT Kaydı Bulunamadı veya Şifre Hatalı!");
+        }
+
+        // --- NORMAL KULLANICI KONTROLLERİ ---
+        const userSnap = await get(child(ref(activeDB), 'users/' + dbUsername));
+        if (!userSnap.exists()) {
+            return showErrorModal("❌ Kullanıcı veritabanında bulunamadı!");
+        }
+
+        const user = userSnap.val();
+        if (user.isActive === false) {
+            return showErrorModal("❌ Hesabınız Askıya Alınmıştır!");
+        }
+
+        const uPass = String(user.password).trim();
+        if (uPass === "123456" || uPass.length < 6) {
+            if (statusModal) statusModal.style.display = "none";
+            let why = uPass === "123456" ? "Şu anki şifreniz varsayılan <b>'123456'</b>'dır. 6 haneli yeni şifre oluşturun. Yeni şifre sadece rakam içermelidir." : `Şifreniz <b>${uPass.length}</b> haneli. En az 6 hane olmalı.`;
+            forcePasswordChange(user.username, user.type, activeDB, auth, why);
+            return;
+        }
+
+        sessionStorage.setItem("currentUser", JSON.stringify({ username: user.username, type: user.type }));
+
+        if (role === "security") {
+            if (secRemember.checked) {
+                localStorage.setItem("securityUser", JSON.stringify({ username: cleanUsername, password: maskPass(cleanPassword) }));
+            } else localStorage.removeItem("securityUser");
+
+            // TÜM DİĞER ROLLER KALDIRILDI SADECE GÜVENLİK KONTROLÜ VAR
+           // AMİR VE GÜVENLİK KONTROLÜ
+            if (user.type === "amir") {
+                window.location.href = "amir.html";
+            } else if (user.type === "security") {
+                window.location.href = "guvenlik.html";
+            } else {
+                return showErrorModal("❌ Sadece amir veya güvenlik yetkisine sahip kullanıcılar giriş yapabilir!");
+            }
+        }
+
+    } catch (err) {
+        console.error(err);
+        return showErrorModal("❌ Bağlantı hatası! İnternetinizi kontrol edin.");
+    }
+}
+
+document.getElementById("secLoginBtn").addEventListener("click", ()=> loginUser(secUsername.value, secPassword.value,"security"));
+
+async function loadSiteName(db){
+  try{
+    const snap = await get(child(ref(db),"settings/siteName"));
+    if(snap.exists()){
+      const name=snap.val().trim();
+      if(name!==""){ siteNameEl.textContent=name; siteNameEl.style.display="block"; }
+    }
+  }catch(e){ console.error("Site adı yüklenemedi", e); }
+}
+
+qrBtn.addEventListener("click", ()=>{
+  setActive(qrBtn);
+  qrModal.style.display = "flex";
+  const qrDiv = document.getElementById("qr-reader");
+  qrDiv.innerHTML = "";
+  qrReader = new Html5Qrcode("qr-reader");
+  const qrBoxSize = Math.min(window.innerWidth*0.8,300);
+  qrReader.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: qrBoxSize },
+    async (qrCodeMessage)=>{
+      try{ await qrReader.stop(); }catch(e){}
+      qrReader=null;
+      qrModal.style.display = "none";
+      await loadSiteConfig(qrCodeMessage);
+      document.getElementById("qrMessage").textContent="İşlem başarılı, şimdi giriş yapabilirsiniz.";
+    },
+    (err)=>{ console.log("QR tarama:",err);}
+  ).catch(err=>{
+    alert("Kamera açılamadı: "+err);
+    qrModal.style.display = "none";
+  });
+});
+
+codeBtn.addEventListener("click", ()=>{
+  setActive(codeBtn);
+  codeModal.classList.remove("hidden");
+  codeInput.value="";
+  codeInput.focus();
+});
+
+codeCancel.addEventListener("click", ()=> codeModal.classList.add("hidden"));
+codeConfirm.addEventListener("click", async ()=>{
+  const code = codeInput.value.trim();
+  if(!/^\d{4}$/.test(code)){ alert("Lütfen 4 haneli sayı girin!"); return; }
+  codeModal.classList.add("hidden");
+  await loadSiteConfig(code);
+  document.getElementById("qrMessage").textContent="Kod başarıyla yüklendi, giriş yapabilirsiniz!";
+});
+
+siteNameEl.addEventListener("mousedown",()=>{ pressTimer=setTimeout(openDisconnectModal,800); });
+siteNameEl.addEventListener("mouseup",()=>clearTimeout(pressTimer));
+siteNameEl.addEventListener("mouseleave",()=>clearTimeout(pressTimer));
+siteNameEl.addEventListener("touchstart",()=>{ pressTimer=setTimeout(openDisconnectModal,800); });
+siteNameEl.addEventListener("touchend",()=>clearTimeout(pressTimer));
+
+function disconnectProject(){
+  localStorage.removeItem("siteID");
+  localStorage.removeItem("siteConfig");
+  sessionStorage.removeItem("currentUser");
+  siteNameEl.textContent="";
+  siteNameEl.style.display="none";
+  showQRButtons(); 
+  document.getElementById("qrMessage").textContent="Proje bağlantısından ayrıldınız.";
+  msg.textContent="";
+}
+
+function openDisconnectModal(){ modal.classList.remove("hidden"); }
+function closeDisconnectModal(){ modal.classList.add("hidden"); }
+cancelBtn.onclick = closeDisconnectModal;
+confirmBtn.onclick = () => { closeDisconnectModal(); disconnectProject(); };
+
+function setActive(button){ [qrBtn, codeBtn].forEach(b=>b.classList.remove("active")); button.classList.add("active"); }
+
+async function loadSiteConfig(inputCode){
+  try{
+    let siteID;
+    if(/^\d{4}$/.test(inputCode)){
+      const shortSnap = await get(child(ref(merkezDB), `shortCodes/${inputCode}`));
+      if(!shortSnap.exists()){
+        msg.textContent = "Kısa kod geçersiz!";
+        showQRButtons(); return null;
+      }
+      siteID = shortSnap.val();
+    } else {
+      siteID = inputCode;
+    }
+    const siteSnap = await get(child(ref(merkezDB), `sites/${siteID}/config`));
+    if(!siteSnap.exists()){
+      msg.textContent = "Site config bulunamadı!";
+      showQRButtons(); return null;
+    }
+    const siteConfig = siteSnap.val();
+    let siteApp = getApps().find(a => a.name === `siteApp-${siteID}`);
+    if(!siteApp) siteApp = initializeApp(siteConfig, `siteApp-${siteID}`);
+    const siteDB = getDatabase(siteApp);
+    localStorage.setItem("siteID", siteID);
+    localStorage.setItem("siteConfig", encryptData(siteConfig));
+    hideQRButtons(); 
+    await loadSiteName(siteDB);
+    msg.textContent = "Site başarıyla yüklendi!";
+    return siteDB;
+  } catch(err){
+    console.error(err);
+    msg.textContent = "Site yüklenirken hata oluştu!";
+    showQRButtons();
+  }
+}
+
+closeQRModal.addEventListener("click", async () => {
+  if(qrReader){
+    try {
+      await qrReader.stop();
+      qrReader.clear();      
+    } catch(e){ console.error("QR durdurulamadı:", e); }
+    qrReader = null;
+  }
+  qrModal.style.display = "none"; 
+});
+
+window.toggleSupport = function() {
+  const wrapper = document.getElementById('supportWrapper');
+  wrapper.classList.toggle('active'); 
+};
+
+document.addEventListener('click', (e) => {
+  const wrapper = document.getElementById('supportWrapper');
+  if (wrapper && !wrapper.contains(e.target) && wrapper.classList.contains('active')) {
+    wrapper.classList.remove('active'); 
+  }
+});
+
+window.addEventListener('offline', () => {
+    document.getElementById('noInternetModal').style.display = 'flex';
+});
+window.addEventListener('online', () => {
+    document.getElementById('noInternetModal').style.display = 'none';
+});
+if (!navigator.onLine) {
+    document.getElementById('noInternetModal').style.display = 'flex';
+}
+
+let deferredPrompt;
+const installBtn = document.getElementById('installBtn');
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.style.display = 'block';
+});
+installBtn.addEventListener('click', async () => {
+  installBtn.style.display = 'none';
+  if(deferredPrompt){
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+  }
+});
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('Service Worker kaydedildi.'))
+      .catch(err => console.error('Service Worker hatası:', err));
+  });
+}
+</script>
+</body>
+</html>

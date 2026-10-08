@@ -1,0 +1,105 @@
+KOLART ÇEVRİMDIŞI DEVRİYE — KURULUM
+
+1. ZIP içindeki index.html, devriye.html, offline-paket.js ve sw.js dosyalarını
+   mevcut sitende aynı klasöre yükle. index.html ve devriye.html tam dosyalardır.
+   HTTPS gerekir. GitHub Pages alt klasörleri için yollar göreceli bırakıldı.
+   Mevcut manifest dosyanı değiştirme. Bu teslimdeki sw.js eski worker yerine geçer;
+   eski worker dosyası gönderilmediği için onun başka sayfaları önbelleğe alma
+   özellikleri bu dosyaya taşınmış değildir.
+
+2. Firebase kaydı bağlı olduğun sitenin kendi Realtime Database'inde oluşur:
+   offlineversiyon
+     CEM GAZİ ARSLAN: "V1"
+   Ad örnektir: her güvenliğin kendi kullanıcı adı ayrı anahtar olur.
+   İlgili kullanıcıda Firebase Auth oturumu ve aktif security hesabı gerekir.
+   Kullanıcının şifresi veya Firebase kimlik belirteci paket verisine eklenmez.
+
+3. İlk internetli girişte paket sessizce hazırlanır. Giriş ve normal yönlendirme
+   indirmeyi beklemez. Sayfadan ayrılınca worker başlamış işi arka planda sürdürür.
+   İlk hazırlık tamamlanmadan internet kesilirse çevrimdışı açılış hazır olmayabilir.
+   Hata olursa sonraki internetli girişte/devriye açılışında tekrar denenir.
+   Giriş ekranında paket için yeni buton, sayaç veya bekleme eklenmedi.
+
+4. Aynı sürüm ve sağlam paket varsa tam veri/dosya paketi yeniden indirilmez.
+   Küçük sürüm ve kullanıcı yetki kontrolleri devam eder.
+   V1'i Firebase'de V2 yaparsan sonraki internetli girişte veya devriye sayfasında
+   bağlantı varken yeni paket indirilir. Index/devriye açıkken sürüm değişikliği
+   canlı dinlenir. Kapalı uygulama için arka planda push servisi kurulmadı.
+
+5. Paket veya zorunlu dosyası silinmişse sonraki internetli girişte cihaz fark eder.
+   Firebase sürümü atomik olarak bir artırılır: V1 -> V2. Yeni paket hazırlanır.
+   İlk kez oluşturulan kullanıcı V1 ile başlar. Aynı kullanıcının yeni telefonu da
+   yerel paketi eksik sayılır ve sürümü artırabilir. Yarım kalan onarım her denemede
+   tekrar sürüm artırmaz. Başarısız güncellemede sağlam eski paket korunur.
+   Bütün tarayıcı verileri internet yokken silinirse paket yeniden getirilemez;
+   önce internetle siteyi seçip tekrar giriş yapmak gerekir.
+
+6. Hazır paket varken internet kapalıysa PWA'nın index/guvenlik açılışı devriye
+   ekranına düşer. Doğrudan devriye.html açılışı da paket verisini kullanır.
+   Saat seçimi, ekipman kontrolü, QR okuma, GPS ve devriye bitirme çevrimdışı çalışır.
+   Kamera/GPS için telefonun kendi izinleri gerekir. İnternet geri geldiğinde
+   veya sonraki internetli devriye açılışında mevcut rapor kuyruğu Firebase'e aktarılır.
+   Fotoğraf gönderilemezse fotoğraflı rapor cihazda tutularak yeniden denenir.
+   Olay sayfası, nöbet sayfası ve diğer uygulama ekranları bu paket kapsamına alınmadı.
+   Blok değiştirme mevcut sayfadaki gibi internetli kalır; nöbetteki blok çevrimdışı
+   paketten seçilir. Paket nokta listesindeki tüm etkin blokların QR'larını içerir.
+
+7. Firebase Rules HAKKINDA ÖNEMLİ:
+   Mevcut rules dosyan verilmediği için mevcut kuralların değiştirilmedi.
+   Kullanıcının kendi offlineversiyon/{username} kaydını OKUYUP YAZABİLMESİ gerekir.
+   Paket şu yolları OKUR:
+     users/{username}
+     settings/siteName
+     settings/allowPointChange
+     telefon/{username}
+     nobetRecords
+     activeDevriye/{username}
+     noktaListe
+     sistemAyarlari/saatModu
+     sistemAyarlari/pazarSaatleri
+     sistemAyarlari/planliSaatler
+     sistemAyarlari/dakikaToleransi
+     tamamlananDevriyeSaatleri/{vardiyaTarihi}
+     BÖLGEqrcodes ve her etkin bloğun {blok}qrcodes yolu
+   Paket sürümünü yükseltme YAZMASI: offlineversiyon/{username}
+   Raporların gönderimi mevcut sayfadaki activeDevriye, devriyeHistory,
+   tamamlananDevriyeSaatleri ve Firebase Storage izinlerini kullanır.
+   Yollardan biri permission_denied verirse paket hazır sayılmaz. Konsolda hangi
+   yolun reddedildiği yazılır. Kök okuma/yazma yetkisini genişletmek gerekmez;
+   eksik izin ilgili yola verilmelidir. offlineversiyon için aşağıdaki ek parçayı
+   mevcut rules nesnesinin İÇİNE birleştirebilirsin; bütün kuralların yerine koyma.
+   Bu örnek securityUIDs/{uid} değerinin kullanıcı adı olduğu yapıya uygundur:
+
+   "offlineversiyon": {
+     "$username": {
+       ".read": "auth != null && (auth.token.admin === true || auth.token.master === true || root.child('securityUIDs').child(auth.uid).val() === $username)",
+       ".write": "auth != null && (auth.token.admin === true || auth.token.master === true || root.child('securityUIDs').child(auth.uid).val() === $username)",
+       ".validate": "newData.isString() && newData.val().matches(/^V[1-9][0-9]*$/)"
+     }
+   }
+
+8. QR/saat ayarları sürüm değiştirilene kadar pakette sabit kalır. Kullanıcının
+   nöbeti, telefon durumu, aktif devriyesi ve tamamlanan saatler devriye açıkken
+   ayrı canlı dinlenir; tam paket yeniden indirilmez. Çevrimdışı cihaz başka
+   telefonların yeni tamamladığı saatleri veya sonradan değişen yetkileri bilemez.
+   Çevrimdışı çalışmada son alınan durum ve cihaz saati kullanılır.
+
+DOĞRULAMA
+Kod kontrolleri ve taklit Firebase/CacheStorage/DOM ile testler yapıldı:
+- İlk V1; aynı sürümde tam paket indirmeme; V2 güncellemesi.
+- Zorunlu dosya kaybında sürüm artırma; yarım indirmede eski paketi koruma.
+- İndirme sırasında sürüm değişikliği; SDK alt modüllerini paketleme.
+- Kullanıcı/site ayrımı; pakete şifre ve token kaydetmeme.
+- Devriye modülünün çevrimdışı soğuk açılışı, saat/ekipman seçimi, QR/GPS kaydı.
+- Raporu telefonda kuyruğa alma; başarısız fotoğrafı koruma; bağlantı dönünce
+  fotoğraf, rapor ve tamamlanan saatin gönderilmesi.
+- Index'in görünen HTML/CSS'sinin korunması ve JavaScript sözdizimi.
+Canlı Firebase projenizde veya gerçek telefonda uçtan uca deneme yapılmadı.
+
+İlk canlı deneme: Dosyaları yükle -> internetli giriş -> Firebase'de kullanıcı V1
+kaydını gör -> devriye ekranına gir -> telefon internetini kapat -> PWA'yı kapat/aç
+-> QR listesini ve saatleri kontrol et -> deneme devriyesi bitir -> interneti aç
+-> devriyeHistory kaydını kontrol et. Sonra V1'i V2 yaparak paket güncellemesini dene.
+Sadece V1 kaydının oluşması paketin tamamlandığını göstermez. Tarayıcı konsolundan
+window.KolartOffline.bundle?.complete ve window.KolartOffline.bundle?.version
+ile son tamamlanmış paketi kontrol edebilirsin.
