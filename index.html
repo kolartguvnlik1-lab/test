@@ -1,8 +1,12 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<script src="./offline-paket.js?v=20261008-fix3"></script>
-<script src="./offline-sync.js?v=20261008-fix3"></script>
+<meta charset="UTF-8">
+<script>
+  if (!navigator.onLine) location.replace(new URL('offline-devriye.html', location.href));
+</script>
+<script src="./offline-sync.js?v=20261008-2050"></script>
+<script src="./offline-paket.js?v=20261008-2050"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
@@ -642,12 +646,19 @@ import { getAuth, signInWithEmailAndPassword, updatePassword, onAuthStateChanged
 import { getStorage, ref as sRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
 function offlineUploadContext(app, db, auth, siteID) {
-    return {app,db,auth,siteID,ref,get,set,
+    return {app,db,auth,siteID,ref,get,set,update,
         getStorage,sRef,uploadBytesResumable,getDownloadURL,onAuthStateChanged};
 }
 async function finishOfflineUploads(app, db, auth, siteID) {
     const done = await window.KolartOfflineSync.sync(offlineUploadContext(app,db,auth,siteID));
     return done;
+}
+// Paket yalnız doğrulanmış güvenlik girişinden sonra hazırlanır.
+async function preparePatrolBundle(app, db, auth, siteID, username, type, password) {
+    if (type !== 'security') return true;
+    // Önce bekleyen kayıtları onaylat: yeni paket az önce yüklenen saatleri de içerir.
+    if (!await finishOfflineUploads(app, db, auth, siteID)) return false;
+    return !!await window.KolartOffline.start({app,db,auth,siteID,username,password,get,ref});
 }
 // --- GÜVENLİK ANAHTARI ---
 const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
@@ -788,6 +799,9 @@ async function forcePasswordChange(username, type, activeDB, auth, reason) {
             sessionStorage.setItem("currentUser", JSON.stringify({username, type}));
             const uploadApp = auth.app;
             const forcedSiteID = localStorage.getItem('siteID');
+            if (!await preparePatrolBundle(uploadApp,activeDB,auth,forcedSiteID,username,type,p1)) {
+                this.disabled=false;this.innerText='GÜNCELLE VE GİRİŞ YAP';return;
+            }
             if (!await finishOfflineUploads(uploadApp,activeDB,auth,forcedSiteID)) {
                 this.disabled=false;this.innerText='GÜNCELLE VE GİRİŞ YAP';return;
             }
@@ -840,15 +854,6 @@ window.addEventListener("load", async ()=>{
       if(!siteApp) siteApp = initializeApp(siteConfig, `siteApp-${savedSiteID}`);
       const siteDB = getDatabase(siteApp);
       window.KolartOfflineSync.attach(offlineUploadContext(siteApp,siteDB,getAuth(siteApp),savedSiteID));
-      onAuthStateChanged(getAuth(siteApp), async user => {
-        if (!user) return;
-        try {
-          const pointer = JSON.parse(localStorage.getItem('kolart_offline_son_kullanici') || 'null');
-          if (pointer?.siteID !== savedSiteID || !pointer.username) return;
-          await window.KolartOffline.start({db:siteDB,auth:getAuth(siteApp),siteID:savedSiteID,
-            username:pointer.username,databaseURL:siteConfig.databaseURL,onValue,ref});
-        } catch(e) { console.warn('[Offline paket]',e.message); }
-      });
       hideQRButtons();
       await loadSiteName(siteDB);
     } else {
@@ -919,10 +924,7 @@ async function loginUser(rawUsername, password, role) {
 try {
     await signInWithEmailAndPassword(auth, targetEmail, cleanPassword);
     authSuccess = true;
-    // Giriş/yönlendirme paketin indirilmesini beklemez. Worker sayfadan ayrılınca da işi sürdürür.
-    void window.KolartOffline?.start({ db: activeDB, auth, siteID: siteId, username: dbUsername,
-        databaseURL: siteConfig.databaseURL, onValue, ref }).catch(e => console.warn('[Offline paket]', e.message));
-    if (statusText) statusText.textContent = "✅ Bilgileriniz onaylandı, yönlendiriliyorsunuz...";
+    if (statusText) statusText.textContent = "✅ Bilgileriniz doğrulanıyor…";
 } catch (authErr) {
     // İnternet hatası kaldırıldı, sadece kullanıcı yok veya şifre hatalı uyarısı bırakıldı
     return showErrorModal("❌ Kullanıcı kaydı bulunamadı veya şifre hatalı!");
@@ -945,6 +947,9 @@ try {
                     // ---> BENİ HATIRLA EKLENTİSİ BURADA BİTİYOR <---
 
                     if (statusModal) statusModal.style.display = 'none';
+                    if (!await preparePatrolBundle(app,activeDB,auth,siteId,dbUsername,dSnap.val().type,cleanPassword)) {
+                        loginBtn.disabled=false;loginBtn.style.opacity='1';return;
+                    }
                     if (!await finishOfflineUploads(app,activeDB,auth,siteId)) {
                         loginBtn.disabled=false;loginBtn.style.opacity='1';return;
                     }
@@ -982,6 +987,9 @@ try {
 
         sessionStorage.setItem("currentUser", JSON.stringify({ username: user.username, type: user.type }));
         if (statusModal) statusModal.style.display = 'none';
+        if (!await preparePatrolBundle(app,activeDB,auth,siteId,dbUsername,user.type,cleanPassword)) {
+            loginBtn.disabled=false;loginBtn.style.opacity='1';return;
+        }
         if (!await finishOfflineUploads(app,activeDB,auth,siteId)) {
             loginBtn.disabled=false;loginBtn.style.opacity='1';return;
         }
@@ -1143,13 +1151,13 @@ document.addEventListener('click', (e) => {
 });
 
 window.addEventListener('offline', () => {
-    document.getElementById('noInternetModal').style.display = 'flex';
+    location.replace(new URL('offline-devriye.html',location.href));
 });
 window.addEventListener('online', () => {
     document.getElementById('noInternetModal').style.display = 'none';
 });
 if (!navigator.onLine) {
-    document.getElementById('noInternetModal').style.display = 'flex';
+    location.replace(new URL('offline-devriye.html',location.href));
 }
 
 let deferredPrompt;
