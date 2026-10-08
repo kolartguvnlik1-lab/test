@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script src="./offline-sync.js?v=20261008-2050"></script>
-<script src="./offline-paket.js?v=20261008-2311"></script>
+<script src="./offline-paket.js?v=20261009-0030"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
@@ -659,7 +659,7 @@ input, textarea {
   if ('serviceWorker' in navigator && window.isSecureContext) {
     // Eski sw.js bu ziyarette eski paket scriptini sunmuşsa yeni servisle bir kez yenile.
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (window.KolartOffline?.REVISION !== '20261008-2311') location.reload();
+      if (window.KolartOffline?.REVISION !== '20261009-0030') location.reload();
     });
     navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
       .catch(error => console.warn('Service Worker hatası:', error.message));
