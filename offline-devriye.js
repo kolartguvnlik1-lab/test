@@ -1,9 +1,12 @@
 /* KOLART offline v4 — 20261008-2050. Bu sayfa hiçbir Firebase isteği göndermez. */
+/* kolart-offline-access:4hane-v1 */
 (() => {
 'use strict';
 document.body.appendChild(document.getElementById('offlineLogin'));
 let currentUser, siteID, patrolMeta, patrolId, activeRoute;
 let isPhoneBroken = false, unlocked = false, pointSaving = false;
+let loginEpoch = 0, loginSubmitting = false, previewEpoch = 0;
+let previewPromise = Promise.resolve(), managerPromptID = '';
 const db = {};
 const ref = (_,path) => ({path});
 const get = async reference => {
@@ -40,13 +43,57 @@ function stopPosition() {
   if(watchId) {navigator.geolocation.clearWatch(watchId);watchId=null;}
   document.getElementById('securityOverlay').style.display='none';
 }
-async function lockScreen() {
-  if(pointSaving || isFinalizing) {showAppModal('LÜTFEN BEKLEYİN','Telefon kaydı tamamlanıyor.','hourglass_empty');return;}
-  await window.closeScanner(); stopPosition(); unlocked=false;
+function renderManagerPrompt(candidate) {
+  const gate=document.getElementById('offlineManagerGate');
+  const input=document.getElementById('offlineManagerPassword');
+  const hint=document.getElementById('offlineManagerHint');
+  const identity=candidate
+    ? `${candidate.id}|${candidate.version}|${candidate.managerVerifier?.hash}` : '';
+  const required=!!candidate && window.KolartOffline.requiresManagerPassword(candidate);
+  if(identity!==managerPromptID || !required)input.value='';
+  managerPromptID=identity;
+  gate.hidden=!required;input.required=required;input.disabled=!required;
+  hint.textContent=candidate
+    ? (required
+      ? `${candidate.version} paketi için yönetici onayı gerekli.`
+      : `${candidate.version} paketi için yönetici şifresi onaylandı. Profil şifrenizi girin.`)
+    : '';
+}
+function showLockedLogin() {
+  loginEpoch++;previewEpoch++;unlocked=false;
   document.querySelector('.app-container').inert=true;
   document.getElementById('offlineLogin').style.display='grid';
   document.getElementById('offlinePassword').value='';
-  document.getElementById('offlineLoginMessage').textContent='Devriyeye devam etmek için şifrenizi girin.';
+  document.getElementById('offlineManagerPassword').value='';
+  const candidate=window.KolartOffline.bundle;
+  renderManagerPrompt(candidate);
+  document.getElementById('offlineLoginMessage').textContent=
+    candidate && window.KolartOffline.requiresManagerPassword(candidate)
+      ? 'Yöneticinizden 4 haneli şifre alın ve profil şifrenizle giriş yapın.'
+      : 'Devriyeye devam etmek için profil şifrenizi tekrar girin.';
+}
+function readAttempts(key) {
+  try {
+    const value=JSON.parse(localStorage.getItem(key)||'{}');
+    return value && typeof value==='object' ? value : {};
+  } catch(_){return {};}
+}
+function checkAttempts(key, label) {
+  const attempts=readAttempts(key);
+  if(attempts.until>Date.now())throw new Error(
+    label+' için '+Math.ceil((attempts.until-Date.now())/1000)+' saniye bekleyin.'
+  );
+}
+function failedAttempt(key) {
+  const attempts=readAttempts(key);
+  attempts.count=(attempts.count||0)+1;
+  if(attempts.count>=5){attempts.until=Date.now()+30000;attempts.count=0;}
+  try{localStorage.setItem(key,JSON.stringify(attempts));}catch(_){}
+}
+async function lockScreen() {
+  if(pointSaving || isFinalizing) {showAppModal('LÜTFEN BEKLEYİN','Telefon kaydı tamamlanıyor.','hourglass_empty');return;}
+  showLockedLogin();
+  await window.closeScanner();stopPosition();
 }
 async function restorePatrol(candidate) {
   currentUser=structuredClone(candidate.user);siteID=candidate.siteID;
@@ -68,8 +115,9 @@ async function restorePatrol(candidate) {
   await refreshQueueLabel();
 }
 async function bootLogin() {
-  document.querySelector('.app-container').inert=true;
+  showLockedLogin();
   const submit=document.getElementById('offlineLoginBtn'),message=document.getElementById('offlineLoginMessage');
+  submit.disabled=true;
   try {
     await window.KolartOfflineSync.open();
     const candidate=await window.KolartOffline.last();
@@ -79,37 +127,102 @@ async function bootLogin() {
       return;
     }
     document.getElementById('offlineUsername').value=candidate.username;
-    message.textContent=`${candidate.blocks.length} bölgenin paketi hazır. Devriye için şifrenizi girin.`;
+    renderManagerPrompt(candidate);
+    submit.disabled=false;
+    message.textContent=window.KolartOffline.requiresManagerPassword(candidate)
+      ? 'Yöneticinizden 4 haneli şifre alın. Yönetici şifresini ve kendi profil şifrenizi girin.'
+      : `${candidate.blocks.length} bölgenin paketi hazır. Devriye için profil şifrenizi girin.`;
   } catch(error) {submit.disabled=true;message.textContent='Telefon hafızası açılamadı: '+error.message;}
 }
+document.getElementById('offlineUsername').addEventListener('input',()=>{
+  if(loginSubmitting)return;
+  const sequence=++previewEpoch;
+  const username=document.getElementById('offlineUsername').value.trim().toLocaleUpperCase('tr-TR');
+  const submit=document.getElementById('offlineLoginBtn'),message=document.getElementById('offlineLoginMessage');
+  document.getElementById('offlinePassword').value='';
+  renderManagerPrompt(null);
+  submit.disabled=true;
+  message.textContent='Kullanıcının telefon paketi kontrol ediliyor…';
+  previewPromise=(async()=>{
+    const packages=await window.KolartOfflineSync.packages(localStorage.getItem('siteID'));
+    const candidate=packages
+      .filter(p=>p.username.trim().toLocaleUpperCase('tr-TR')===username)
+      .sort((a,b)=>b.createdAt-a.createdAt)[0];
+    const ready=await window.KolartOffline.intact(candidate);
+    if(sequence!==previewEpoch || loginSubmitting)return;
+    renderManagerPrompt(ready ? candidate : null);
+    submit.disabled=!ready;
+    message.textContent=!ready
+      ? 'Bu kullanıcı için tamamlanmış cihaz paketi bulunamadı. İnternet varken index’te giriş yapın.'
+      : (window.KolartOffline.requiresManagerPassword(candidate)
+        ? 'Yöneticinizden 4 haneli şifre alın ve kendi profil şifrenizi girin.'
+        : 'Devriye için profil şifrenizi girin.');
+  })().catch(error=>{
+    if(sequence===previewEpoch && !loginSubmitting)message.textContent=error.message;
+  });
+});
+document.getElementById('offlineManagerPassword').addEventListener('input',event=>{
+  event.target.value=event.target.value.replace(/\D/g,'').slice(0,4);
+});
 document.getElementById('offlineLoginForm').onsubmit=async event=>{
   event.preventDefault();
   const button=document.getElementById('offlineLoginBtn'),message=document.getElementById('offlineLoginMessage');
-  if(button.disabled)return;button.disabled=true;
+  if(button.disabled || loginSubmitting)return;
+  button.disabled=true;loginSubmitting=true;
+  const epoch=++loginEpoch;
+  const inputs=['offlineUsername','offlinePassword','offlineManagerPassword'].map(id=>document.getElementById(id));
+  inputs.forEach(input=>input.readOnly=true);
   try {
+    await previewPromise;
+    if(epoch!==loginEpoch)return;
     const username=document.getElementById('offlineUsername').value.trim();
     const password=document.getElementById('offlinePassword').value.trim();
     if(!username || !password)throw new Error('Kullanıcı adı ve şifre gerekli.');
     const candidate=await window.KolartOffline.load(localStorage.getItem('siteID'),username);
+    if(epoch!==loginEpoch)return;
     if(!candidate)throw new Error('Bu kullanıcı için tamamlanmış cihaz paketi bulunamadı.');
+    renderManagerPrompt(candidate);
     const attemptsKey='kolart_offline_deneme_'+candidate.id;
-    let attempts;try{attempts=JSON.parse(localStorage.getItem(attemptsKey)||'{}');}catch(_){attempts={};}
-    if(attempts.until>Date.now())throw new Error('Şifre denemesi için '+Math.ceil((attempts.until-Date.now())/1000)+' saniye bekleyin.');
-    message.textContent='Şifre cihazda doğrulanıyor…';
-    if(!await window.KolartOffline.verify(candidate,password)) {
-      attempts.count=(attempts.count||0)+1;
-      if(attempts.count>=5){attempts.until=Date.now()+30000;attempts.count=0;}
-      try{localStorage.setItem(attemptsKey,JSON.stringify(attempts));}catch(_){}
+    checkAttempts(attemptsKey,'Profil şifresi denemesi');
+    message.textContent='Profil şifreniz cihazda doğrulanıyor…';
+    const profileOK=await window.KolartOffline.verify(candidate,password);
+    if(epoch!==loginEpoch)return;
+    if(!profileOK) {
+      failedAttempt(attemptsKey);
       throw new Error('Kullanıcı adı veya şifre hatalı.');
     }
     localStorage.removeItem(attemptsKey);
-    await restorePatrol(candidate);unlocked=true;
+    if(window.KolartOffline.requiresManagerPassword(candidate)) {
+      const managerPassword=document.getElementById('offlineManagerPassword').value.trim();
+      if(!/^\d{4}$/.test(managerPassword)) {
+        document.getElementById('offlineManagerPassword').focus();
+        throw new Error('Yöneticinizden 4 haneli şifre alın ve bu alana girin.');
+      }
+      const managerAttemptsKey='kolart_offline_yonetici_deneme_'+candidate.id+'|'+candidate.version+'|'+candidate.managerVerifier.hash;
+      checkAttempts(managerAttemptsKey,'Yönetici şifresi denemesi');
+      message.textContent='Yöneticinin 4 haneli şifresi cihazda doğrulanıyor…';
+      const managerOK=await window.KolartOffline.approveManagerPassword(candidate,managerPassword);
+      if(epoch!==loginEpoch)return;
+      if(!managerOK) {
+        failedAttempt(managerAttemptsKey);
+        throw new Error('Yöneticinin 4 haneli şifresi hatalı.');
+      }
+      localStorage.removeItem(managerAttemptsKey);
+    }
+    await restorePatrol(candidate);
+    if(epoch!==loginEpoch)return;
+    unlocked=true;
     document.querySelector('.app-container').inert=false;
     document.getElementById('offlineLogin').style.display='none';
     document.getElementById('offlinePassword').value='';
+    document.getElementById('offlineManagerPassword').value='';
+    renderManagerPrompt(candidate);
     message.textContent='';
-  } catch(error){message.textContent=error.message;}
-  finally {button.disabled=false;}
+  } catch(error){if(epoch===loginEpoch)message.textContent=error.message;}
+  finally {
+    loginSubmitting=false;inputs.forEach(input=>input.readOnly=false);
+    button.disabled=false;
+  }
 };
 
 let devriyeStarted = false;
@@ -651,6 +764,22 @@ document.getElementById('offlineLockBtn').onclick=()=>void lockScreen();
 document.getElementById('incidentBtn').style.display='none';
 window.addEventListener('online',()=>void refreshQueueLabel());
 window.addEventListener('offline',()=>void refreshQueueLabel());
+// Geri/ileri önbelleğinden dönmek de yeni giriştir; profil şifresi saklanmaz.
+window.addEventListener('pagehide',()=>{
+  showLockedLogin();stopPosition();void window.closeScanner();
+});
+window.addEventListener('pageshow',event=>{
+  if(event.persisted)void bootLogin();
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden && (unlocked || loginSubmitting)) {
+    showLockedLogin();stopPosition();void window.closeScanner();
+  } else if(!document.hidden && !unlocked) {
+    const candidate=window.KolartOffline.bundle;
+    const username=document.getElementById('offlineUsername').value.trim().toLocaleUpperCase('tr-TR');
+    if(candidate && candidate.username===username)renderManagerPrompt(candidate);
+  }
+});
 // Dosya fonta veya başka bir CDN'e ihtiyaç duymaz.
 const icons={shield:'◆',verified:'✓',touch_app:'☝',qr_code_scanner:'▣',hourglass_empty:'⌛',
   play_circle:'▶',warning:'⚠',info:'ⓘ',error:'!',security:'◆',flashlight_on:'☀',
