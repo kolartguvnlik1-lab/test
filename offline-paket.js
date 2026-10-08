@@ -4,8 +4,9 @@
 
   const BUILD = '20261008-2050';
 
-  // Devriye sayfasının BUILD uyumluluğu korunur; bu üç dosyanın önbelleği yenilenir.
-  const REVISION = '20261008-2311';
+  // BUILD uyumluluğu korunur; yönetici parolası eklenen dosyaların önbelleği yenilenir.
+  const REVISION = '20261009-0030';
+  const PREVIOUS_REVISION = '20261008-2311';
 
   const base = new URL('./', document.currentScript.src);
   const POINTER = 'kolart_offline_son_kullanici';
@@ -177,7 +178,7 @@
             if (m.build !== BUILD || m.revision !== REVISION) {
               reject(
                 new Error(
-                  'sw.js sürümü eski. Verilen üç dosyayı birlikte yükleyin.'
+                  'sw.js sürümü eski. Güncellenen dosyaları birlikte yükleyin.'
                 )
               );
 
@@ -254,21 +255,20 @@
     };
   }
 
+  function validVerifier(v) {
+    return !!(
+      v &&
+      v.algorithm === 'PBKDF2-SHA256' &&
+      /^[0-9a-f]{32}$/.test(v.salt) &&
+      /^[0-9a-f]{64}$/.test(v.hash) &&
+      Number.isInteger(v.iterations) &&
+      v.iterations >= 100000 && v.iterations <= 600000
+    );
+  }
+
   async function verify(candidate, password) {
     const v = candidate?.verifier;
-
-    if (
-      !v ||
-      v.algorithm !== 'PBKDF2-SHA256' ||
-      !/^[0-9a-f]{32}$/.test(v.salt) ||
-      !/^[0-9a-f]{64}$/.test(v.hash)
-    ) {
-      return false;
-    }
-
-    if (v.iterations < 100000 || v.iterations > 600000) {
-      return false;
-    }
+    if (!validVerifier(v)) return false;
 
     const value = await digest(
       String(password).trim(),
@@ -285,17 +285,93 @@
     return difference === 0;
   }
 
-  async function intact(candidate) {
+  function managerPassword(value) {
+    // Firebase sayısı baştaki sıfırı saklamaz; 458 değeri 0458 olarak kullanılır.
+    const password = typeof value === 'number' &&
+      Number.isInteger(value) && value >= 0 && value <= 9999
+      ? String(value).padStart(4, '0')
+      : (typeof value === 'string' ? value.trim() : '');
+
+    if (!/^\d{4}$/.test(password)) {
+      throw new Error(
+        '/offline4hane kaydı 4 rakamdan oluşan bir yönetici parolası olmalı.'
+      );
+    }
+
+    return password;
+  }
+
+  const hasManagerPassword = candidate =>
+    validVerifier(candidate?.managerVerifier);
+
+  function requiresManagerPassword(candidate) {
+    if (!hasManagerPassword(candidate)) return true;
+    const approved = candidate.managerApproval;
+
+    return !(
+      approved &&
+      approved.siteID === candidate.siteID &&
+      approved.uid === candidate.uid &&
+      approved.packageID === candidate.id &&
+      approved.packageCreatedAt === candidate.createdAt &&
+      approved.version === candidate.version &&
+      approved.verifierHash === candidate.managerVerifier.hash &&
+      Number.isFinite(approved.approvedAt) && approved.approvedAt > 0
+    );
+  }
+
+  async function verifyManagerPassword(candidate, password) {
+    const value = String(password ?? '').trim();
+    return /^\d{4}$/.test(value) && hasManagerPassword(candidate) &&
+      await verify({ verifier: candidate.managerVerifier }, value);
+  }
+
+  async function approveManagerPassword(candidate, password) {
+    if (!await verifyManagerPassword(candidate, password)) return false;
+
+    // Başka bir girişte yeni paket yüklenmişse eski paketi üzerine yazma.
+    const packages = await window.KolartOfflineSync.packages(candidate.siteID);
+    const current = packages.find(p => p.id === candidate.id);
+    if (
+      !current || current.version !== candidate.version ||
+      current.createdAt !== candidate.createdAt ||
+      current.managerVerifier?.hash !== candidate.managerVerifier.hash
+    ) {
+      throw new Error('Paket sürümü değişti. Giriş ekranını yeniden açın.');
+    }
+
+    const approved = copy(current);
+    approved.managerApproval = {
+      siteID: approved.siteID,
+      uid: approved.uid,
+      packageID: approved.id,
+      packageCreatedAt: approved.createdAt,
+      version: approved.version,
+      verifierHash: approved.managerVerifier.hash,
+      approvedAt: Date.now()
+    };
+
+    // Onay, telefon kaydı tamamlandıktan sonra geçerli sayılır.
+    await window.KolartOfflineSync.putPackage(approved);
+    candidate.managerApproval = copy(approved.managerApproval);
+    bundle = approved;
+    return true;
+  }
+
+  async function intact(candidate, allowPreviousRevision = false) {
     if (
       !candidate?.complete ||
       candidate.schema !== 4 ||
       candidate.build !== BUILD ||
-      candidate.revision !== REVISION ||
+      (candidate.revision !== REVISION &&
+        !(allowPreviousRevision && candidate.revision === PREVIOUS_REVISION)) ||
       !candidate.verifier ||
       !candidate.blocks?.length
     ) {
       return false;
     }
+
+    if (!allowPreviousRevision && !hasManagerPassword(candidate)) return false;
 
     if (
       !Array.isArray(candidate.requiredAssets) ||
@@ -317,7 +393,7 @@
     return true;
   }
 
-  async function load(siteID, username) {
+  async function load(siteID, username, { allowPreviousRevision = false } = {}) {
     bundle = null;
 
     const packages = await window.KolartOfflineSync.packages(siteID);
@@ -326,7 +402,7 @@
       .filter(p => normalize(p.username) === normalize(username))
       .sort((a, b) => b.createdAt - a.createdAt)[0];
 
-    if (!await intact(candidate)) return null;
+    if (!await intact(candidate, allowPreviousRevision)) return null;
 
     bundle = candidate;
 
@@ -617,7 +693,7 @@
 
     if (typeof c.runTransaction !== 'function') {
       throw new Error(
-        'index.html sürümü eski. Verilen üç dosyayı birlikte yükleyin.'
+        'index.html sürümü eski. Güncellenen dosyaları birlikte yükleyin.'
       );
     }
 
@@ -652,7 +728,8 @@
     };
 
     const remoteVersion = await readVersion(c, username);
-    const candidate = await load(c.siteID, username);
+    // Eski paket sadece çevrimiçi yükseltmede okunur; offline giriş onaysız açılmaz.
+    const candidate = await load(c.siteID, username, { allowPreviousRevision: true });
     const local = candidate?.uid === authUser.uid ? candidate : null;
     const flag = readFlag(c.siteID, username);
 
@@ -665,6 +742,49 @@
       flag.packageID === local.id &&
       flag.version === local.version
     );
+
+    // Bu ekleme için mevcut v1/v2 bayrağını ve devriye verilerini koru.
+    // Aynı sürümde yalnız yeni yönetici parolası ve güncel sayfa dosyaları eklenir.
+    if (
+      local && (local.revision !== REVISION || !hasManagerPassword(local)) &&
+      (
+        (local.versionPending &&
+          (remoteVersion === local.version || remoteVersion === local.versionBase)) ||
+        (hasLocalFlag && !local.versionPending && remoteVersion === local.version)
+      )
+    ) {
+      progress(10, local.version + ' paketine yönetici parolası ekleniyor…');
+      const pin = managerPassword(await readServer(c, 'offline4hane'));
+      const managerVerifier = await verifier(pin);
+      const assets = await shell(progress);
+      const upgraded = {
+        ...copy(local),
+        revision: REVISION,
+        managerVerifier,
+        managerApproval: null,
+        assetCache: assets.cacheName,
+        requiredAssets: assets.files
+      };
+
+      if (!await verify(upgraded, c.password)) {
+        upgraded.verifier = await verifier(String(c.password).trim());
+      }
+
+      sameSession(c, authUser.uid);
+      await window.KolartOfflineSync.putPackage(upgraded);
+      if (!await intact(upgraded)) {
+        throw new Error('Güncellenen paket telefon hafızasında doğrulanamadı.');
+      }
+
+      if (upgraded.versionPending) await commitVersion(c, upgraded);
+      else {
+        remember(upgraded);
+        bundle = upgraded;
+      }
+
+      progress(100, upgraded.version + ' paketi hazır. Yönetici parolası eklendi.');
+      return upgraded;
+    }
 
     // Kesintiye uğramış Firebase onayını aynı indirilmiş paketle sürdür.
     // Tekrar indirme veya sürüm artırma.
@@ -749,6 +869,7 @@
     );
 
     const paths = [
+      'offline4hane',
       'noktaListe',
       'nobetRecords',
       'activeDevriye/' + username,
@@ -776,6 +897,10 @@
     const data = Object.fromEntries(
       values.map(r => r.value)
     );
+
+    const pin = managerPassword(data.offline4hane);
+    // Parolaların açık metni yerine cihazda doğrulanabilen özetleri saklanır.
+    delete data.offline4hane;
 
     data['users/' + username] = user;
 
@@ -908,6 +1033,7 @@
     const passwordVerifier = await verifier(
       String(c.password).trim()
     );
+    const managerVerifier = await verifier(pin);
 
     const assets = await shell(progress);
 
@@ -937,6 +1063,8 @@
         : blocks[0],
       data,
       verifier: passwordVerifier,
+      managerVerifier,
+      managerApproval: null,
       createdAt: Date.now(),
       capturedShift: shiftKey(),
       assetCache: assets.cacheName,
@@ -1115,6 +1243,9 @@
     load,
     last,
     verify,
+    requiresManagerPassword,
+    verifyManagerPassword,
+    approveManagerPassword,
     intact,
     shiftKey,
 
