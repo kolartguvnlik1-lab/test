@@ -396,14 +396,6 @@ self.addEventListener('fetch', e => {
         'index.html'
       ].includes(relative);
 
-      if (entry && self.navigator.onLine === false) {
-        if (relative !== 'index.html') {
-          return Response.redirect(indexURL, 302);
-        }
-
-        return await cache.match(indexURL) || unavailable();
-      }
-
       try {
         const response = await fetchTimed(
           e.request,
@@ -425,22 +417,14 @@ self.addEventListener('fetch', e => {
 
         return response;
       } catch (_) {
-        if (entry) {
-          if (relative !== 'index.html') {
-            return Response.redirect(indexURL, 302);
-          }
-
-          return await cache.match(indexURL) || unavailable();
-        }
-
         const hit = await cache.match(
-          url.href,
+          entry ? indexURL : url.href,
           {
             ignoreSearch: true
           }
         );
 
-        return hit || unavailable();
+        return hit || (entry ? Response.error() : unavailable());
       }
     })());
 
