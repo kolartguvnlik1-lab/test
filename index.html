@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<script src="./offline-paket.js?v=20261008-sync2"></script>
-<script src="./offline-sync.js?v=20261008-sync2"></script>
+<script src="./offline-paket.js?v=20261008-fix3"></script>
+<script src="./offline-sync.js?v=20261008-fix3"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
@@ -840,6 +840,15 @@ window.addEventListener("load", async ()=>{
       if(!siteApp) siteApp = initializeApp(siteConfig, `siteApp-${savedSiteID}`);
       const siteDB = getDatabase(siteApp);
       window.KolartOfflineSync.attach(offlineUploadContext(siteApp,siteDB,getAuth(siteApp),savedSiteID));
+      onAuthStateChanged(getAuth(siteApp), async user => {
+        if (!user) return;
+        try {
+          const pointer = JSON.parse(localStorage.getItem('kolart_offline_son_kullanici') || 'null');
+          if (pointer?.siteID !== savedSiteID || !pointer.username) return;
+          await window.KolartOffline.start({db:siteDB,auth:getAuth(siteApp),siteID:savedSiteID,
+            username:pointer.username,databaseURL:siteConfig.databaseURL,onValue,ref});
+        } catch(e) { console.warn('[Offline paket]',e.message); }
+      });
       hideQRButtons();
       await loadSiteName(siteDB);
     } else {
