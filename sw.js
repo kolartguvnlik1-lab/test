@@ -9,7 +9,7 @@ const BASE = new URL('./', self.location.href);
 const SHELL =
   'kolart-offline-shell-v4-' + BUILD + '-' + REVISION;
 
-const MARKER = new URL('__kolart_shell_v4', BASE).href;
+const MARKER = new URL('__kolart_shell_v5', BASE).href;
 
 const FILES = [
   'index.html',
