@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="tr" class="dark">
 <head>
-<script src="./offline-paket.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>KOLART — Canlı Devriye Sistemi</title>
@@ -167,7 +166,7 @@ body { background-color: var(--bg-dark); color: var(--text-main); }
     <div style="font-size: 14px; margin-bottom: 4px;">⚠️ İNTERNET BAĞLANTISI YOK</div>
     <div style="font-size: 10px; font-weight: 400; text-transform: none; opacity: 0.9;">
         Şu anda çevrimdışı çalışıyorsunuz. <br>
-        <b>VERİLER BU TELEFONA KAYDEDİLİYOR.</b> <br>
+        <b>SAYFAYI YENİLEMEYİN VE KAPATMAYIN!</b> <br>
         QR okutmaya devam edin, her şey kaydediliyor.
     </div>
 </div>
@@ -336,7 +335,7 @@ body { background-color: var(--bg-dark); color: var(--text-main); }
 </div>
 <script type="module">
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-import { getDatabase, ref, get as firebaseGet, set, update, onValue, push } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+import { getDatabase, ref, get, set, update, onValue, push } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { getStorage, ref as sRef, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 const merkezConfig = {
@@ -364,11 +363,7 @@ const decryptData = (encrypted) => {
     } catch (e) { return null; }
 };
 
-const offlinePackage = !navigator.onLine ? await window.KolartOffline.last() : null;
-const currentUser = JSON.parse(sessionStorage.getItem('currentUser')) || offlinePackage?.user;
-if (!navigator.onLine && currentUser && offlinePackage?.username === currentUser.username) {
-    sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-}
+const currentUser = JSON.parse(sessionStorage.getItem('currentUser'));
 const siteID = localStorage.getItem("siteID");
 const siteConfigStr = localStorage.getItem("siteConfig");
 const siteConfig = decryptData(siteConfigStr);
@@ -384,36 +379,20 @@ try {
 }
 const db = getDatabase(app);
 const auth = getAuth(app);
-await window.KolartOffline.load(siteID, currentUser.username);
-const get = reference => window.KolartOffline.get(reference, firebaseGet);
-const pendingStartKey = `kolart_bekleyen_baslangic_${siteID}_${currentUser.username}`;
-const offlineContext = {db, auth, siteID, username: currentUser.username, databaseURL: siteConfig.databaseURL, onValue, ref};
-function isOfflinePackageReady() {
-    return window.KolartOffline.bundle?.uid && window.KolartOffline.bundle.username === currentUser.username;
-}
 let storage = null;
 try { storage = getStorage(app); } catch(e) { console.warn("Storage ayarı yok!"); }
-let isPhoneBroken = window.KolartOffline.bundle?.data[`telefon/${currentUser.username}`] === true;
-if (!navigator.onLine && isOfflinePackageReady()) {
-    isPhoneBroken = window.KolartOffline.read(`telefon/${currentUser.username}`).val() === true;
-}
+let isPhoneBroken = false;
 onValue(ref(db, `telefon/${currentUser.username}`), (snap) => {
     isPhoneBroken = snap.val() === true;
 });
 onAuthStateChanged(auth, (user) => {
-    if (!navigator.onLine && isOfflinePackageReady()) {
-        initOnce();
-    } else if (!user) {
+    if (!user) {
         window.location.href = "index.html";
     } else {
         console.log("Yetkili Giriş:", user.uid);
-        void window.KolartOffline.start(offlineContext).then(() => window.KolartOffline.watchDynamic(offlineContext))
-            .catch(e => console.warn('[Offline paket]', e.message));
-        initOnce();
+        init(); 
     }
 });
-let didInit = false;
-function initOnce() { if (!didInit) { didInit = true; void init(); } }
 const OFFLINE_STORAGE_KEY = `patrol_data_${currentUser.username}`;
 const OUTBOX_STORAGE_KEY = `patrol_outbox_${currentUser.username}`;
 const activeDevriyeRef = ref(db, `activeDevriye/${currentUser.username}`);
@@ -426,7 +405,7 @@ let eqStatus = { gps: null, fener: null, yelek: null };
 let startTime = null;
 let readPoints = [];
 let qrScanner = null;
-let currentBlock = window.KolartOffline.bundle?.block || "BÖLGE";
+let currentBlock = "BÖLGE";
 let isFlashOn = false;
 let bestLocation = null;
 let watchId = null;
@@ -470,9 +449,7 @@ function saveToLocal() {
     localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify({
         startTime: startTime ? startTime.toISOString() : null,
         readPoints: readPoints,
-        hedefSaat: secilenHedefSaat, // <--- YEDEĞE SAATİ DE EKLİYORUZ
-        block: currentBlock,
-        equipment: eqStatus
+        hedefSaat: secilenHedefSaat // <--- YEDEĞE SAATİ DE EKLİYORUZ
     }));
 }
 async function syncActivePatrolToCloud() {
@@ -510,21 +487,8 @@ async function syncActivePatrolToCloud() {
     try {
         await update(activeDevriyeRef, {
             startTime: startTime ? startTime.toISOString() : new Date().toISOString(),
-            readPoints: cleanPoints,
-            equipment: eqStatus,
-            hedefSaat: secilenHedefSaat
+            readPoints: cleanPoints
         });
-        if (localStorage.getItem(pendingStartKey)) {
-            if (secilenHedefSaat) {
-                const shift = new Date(startTime);
-                if (shift.getHours() < 8) shift.setDate(shift.getDate()-1);
-                const date = `${shift.getFullYear()}-${String(shift.getMonth()+1).padStart(2,'0')}-${String(shift.getDate()).padStart(2,'0')}`;
-                const mode = (await get(ref(db,'sistemAyarlari/saatModu'))).val() || 'tekli';
-                const path = `tamamlananDevriyeSaatleri/${date}/${mode === 'blok' ? currentBlock + '/' : ''}${secilenHedefSaat}`;
-                await set(ref(db,path), currentUser.name || currentUser.username);
-            }
-            localStorage.removeItem(pendingStartKey);
-        }
     } catch (e) { console.log("Anlık eşitleme hatası:", e); }
 }
 function startEndBtnCountdown() {
@@ -605,7 +569,7 @@ window.checkEq = (tip, cevap) => {
 
     // --- 👻 HAYALET AVCISI (GHOST BUSTER) MODÜLÜ ---
     // Eğer internet varsa, cihazdaki veriye körü körüne inanma, Firebase'e sor!
-    if (navigator.onLine && !localStorage.getItem(pendingStartKey)) {
+    if (navigator.onLine) {
         try {
             const snap = await get(activeDevriyeRef);
             
@@ -635,8 +599,6 @@ window.checkEq = (tip, cevap) => {
         const data = JSON.parse(savedData);
         startTime = new Date(data.startTime);
         readPoints = data.readPoints || [];
-        currentBlock = data.block || currentBlock;
-        eqStatus = data.equipment || eqStatus;
         secilenHedefSaat = data.hedefSaat || null; // <--- YEDEKTEN SAATİ GERİ YÜKLE!
         devriyeStarted = true;
         isFinalizing = false;
@@ -670,7 +632,6 @@ window.checkEq = (tip, cevap) => {
     }
     loadQRInterface();
     syncOutbox();
-    if (navigator.onLine && localStorage.getItem(pendingStartKey)) syncActivePatrolToCloud();
 }
 document.getElementById('backHomeBtn').onclick = () => {
     window.location.href = "guvenlik.html";
@@ -703,11 +664,11 @@ function uiReadyMode() {
     // ------------------------------------------------------------------------------------------
 
     try {
-        {
+        if(navigator.onLine) {
             const nSnap = await get(nobetRef);
             if (nSnap.exists()) {
                 const active = Object.values(nSnap.val()).find(r => r.startBy === (currentUser.name || currentUser.username) && r.status === 'started');
-                if (active && !devriyeStarted) currentBlock = (active.startPoint || "BÖLGE").trim();
+                if (active) currentBlock = (active.startPoint || "BÖLGE").trim();
             }
         }
         document.getElementById('routeName').innerText = currentBlock.toUpperCase() + " ÇEVRESİ";
@@ -814,9 +775,7 @@ function updateUIVisually(pointName) {
     refreshStats(); 
 }
 document.getElementById('startBtn').onclick = () => {
-    if(!navigator.onLine && !isOfflinePackageReady()) {
-        showAppModal("PAKET BULUNAMADI", "Önce internet bağlantısıyla giriş yaparak çevrimdışı paketi hazırlayın.", "signal_wifi_off"); return;
-    }
+    if(!navigator.onLine) { showAppModal("BAĞLANTI HATASI", "Devriyeyi başlatmak için internet şart!", "signal_wifi_off"); return; }
     openHourSelectModal(); // Önce saati seçecek!
 };
 document.getElementById('finalStartBtn').onclick = async () => {
@@ -831,15 +790,12 @@ document.getElementById('finalStartBtn').onclick = async () => {
         uiStartMode();
         startTimerLoop();
         loadQRInterface();
-        const startPayload = {
-            startTime: startTime.toISOString(), readPoints: [], equipment: eqStatus, hedefSaat: secilenHedefSaat
-        };
-        window.KolartOffline.remember(`activeDevriye/${currentUser.username}`, startPayload);
-        if (navigator.onLine) {
-            set(activeDevriyeRef, startPayload).catch(e => console.warn('Başlangıç eşitleme hatası:',e));
-        } else {
-            localStorage.setItem(pendingStartKey, '1');
-        }
+        set(activeDevriyeRef, { 
+            startTime: startTime.toISOString(), 
+            readPoints: [],
+            equipment: eqStatus,
+            hedefSaat: secilenHedefSaat
+        });
 
         // Seçilen devriye saatini başlatıldığı an güvenlik adıyla kapatır
         if (secilenHedefSaat) {
@@ -860,9 +816,7 @@ document.getElementById('finalStartBtn').onclick = async () => {
                 const personelAdi = currentUser?.name || currentUser?.username || localStorage.getItem('guvenlikAdi') || "Bilinmeyen Personel";
 
                 // true yerine güvenlik adını yazıyoruz
-                const hourPath = `${targetPath}/${secilenHedefSaat}`;
-                window.KolartOffline.remember(hourPath, personelAdi);
-                if (navigator.onLine) await set(ref(db, hourPath), personelAdi);
+                await set(ref(db, `${targetPath}/${secilenHedefSaat}`), personelAdi);
 
             } catch(e) {
                 console.error("Devriye saati işaretleme hatası:", e);
@@ -1022,6 +976,7 @@ function startTimerLoop() {
 }
 document.getElementById('endBtn').onclick = () => {
     if (isFinalizing || !devriyeStarted) return; 
+    if (!navigator.onLine) { showAppModal("İŞLEM ENGELLENDİ", "İnternet yokken devriye bitirilemez!", "cloud_off"); return; }   
     
     const allCards = document.querySelectorAll('.qr-card');
 
@@ -1149,32 +1104,11 @@ async function finalizePatrol(note = "", eksikListesi = []) {
     outbox.push(log);
     localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(outbox));    
     localStorage.removeItem(OFFLINE_STORAGE_KEY);    
-    localStorage.removeItem(pendingStartKey);
-    window.KolartOffline.remember(`activeDevriye/${currentUser.username}`, null);
     
     if (navigator.onLine) {
         await set(activeDevriyeRef, null).catch(() => {}); 
     }
     
-    if (!navigator.onLine) {
-        isFinalizing = false;
-        const endButton = document.getElementById('endBtn');
-        endButton.style.pointerEvents = 'auto'; endButton.style.opacity = '1'; endButton.innerText = 'DEVRİYEYİ BİTİR';
-        eqStatus = { gps: null, fener: null, yelek: null };
-        ['gps','fener','yelek'].forEach(t => {
-            document.getElementById(t+'Evet').style.background = 'none';
-            document.getElementById(t+'Hayir').style.background = 'none';
-        });
-        const startButton = document.getElementById('finalStartBtn');
-        startButton.style.opacity = '0.3'; startButton.style.pointerEvents = 'none';
-        const forcedButton = document.getElementById('forceFinishBtn');
-        forcedButton.style.pointerEvents = 'auto'; forcedButton.style.opacity = '1';
-        forcedButton.disabled = true;
-        uiReadyMode();
-        loadQRInterface();
-        showAppModal("CİHAZA KAYDEDİLDİ", "Rapor telefona kaydedildi. İnternet geldiğinde otomatik gönderilecek.", "cloud_sync");
-        return;
-    }
     // 2. CANLI SAYAÇ (20Saniyelik Limit)
     let secondsLeft = 20;
     
@@ -1253,23 +1187,20 @@ async function syncOutbox() {
         for (const log of outbox) {
             try {
                 for (let pt of log.points) {
-                    if (pt.offlineBase64 && !pt.photoUrl) {
-                        if (!storage) throw new Error('Fotoğraf için Storage ayarı gerekli');
+                    if (pt.offlineBase64 && !pt.photoUrl && storage) {
                         const url = await uploadPhotoToStorage(pt.name, pt.offlineBase64);
                         if (url) {
                             pt.photoUrl = url;
                             pt.offlineBase64 = null; 
-                        } else {
-                            throw new Error('Fotoğraf yüklenemedi; cihazdaki rapor yeniden denenecek');
                         }
                     }
                 }
-                const cleanLogPoints = log.points.map(p => {
+                log.points = log.points.map(p => {
                     const { offlineBase64, ...rest } = p;
                     return rest;
                 });
                 const logPatrolId = log.patrolId || `P_${log.timestamp}`; 
-                await set(ref(db, `devriyeHistory/${log.dateKey}/${log.user}/${logPatrolId}`), { ...log, points: cleanLogPoints });           
+                await set(ref(db, `devriyeHistory/${log.dateKey}/${log.user}/${logPatrolId}`), log);           
                 hasSuccess = true; 
 				// --- SAATİ KAPATMA İŞLEMİ ---
             // --- SAATİ KAPATMA İŞLEMİ (3 MOD DESTEKLİ) ---
@@ -1308,16 +1239,12 @@ if (log.hedefSaat && log.hedefSaat !== "Belirtilmedi") {
             }
         }      
         localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(basarisizlar));       
-        if (hasSuccess && !devriyeStarted) {
+        if (hasSuccess) {
             set(activeDevriyeRef, null).catch(()=>{});
         }
     } finally {
         isSyncOutboxRunning = false; 
     }
-}
-if (!navigator.onLine && isOfflinePackageReady()) {
-    const badge = document.getElementById('eliteSelectBadge');
-    if (badge) badge.style.display = window.KolartOffline.read('settings/allowPointChange').val() === true ? 'block' : 'none';
 }
 onValue(ref(db, 'settings/allowPointChange'), (snap) => {
     const badge = document.getElementById('eliteSelectBadge');
@@ -1376,7 +1303,6 @@ document.getElementById('incidentBtn').onclick = () => {
     window.location.href = "olay.html";
 };// Arka Planda Sessizce Gerçek Saati ve Tarihi Çeken Yardımcı Fonksiyon
 async function checkTimeAndGetDate() {
-    if (!navigator.onLine) return { date: new Date(), isApi: false };
     try {
         const res = await fetch('https://worldtimeapi.org/api/timezone/Europe/Istanbul');
         if (!res.ok) throw new Error("API1 Hata");
@@ -1537,11 +1463,6 @@ window.openHourSelectModal = async () => {
         area.innerHTML = `<div style="color:#ff3b30; padding:20px;">BAĞLANTI HATASI!</div>`;
     }
 };
-if (!navigator.onLine && isOfflinePackageReady()) initOnce();
-window.addEventListener('online', () => {
-    if (auth.currentUser) void window.KolartOffline.start(offlineContext)
-        .then(() => window.KolartOffline.watchDynamic(offlineContext)).catch(e => console.warn('[Offline paket]',e.message));
-});
 </script><div id="hourSelectModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; justify-content:center; align-items:center; flex-direction:column;">
     <div style="background:#111; padding:20px; border-radius:15px; border: 1px solid #00ffcc; width:90%; max-width:400px; text-align:center; box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);">
         <h3 style="color:#00ffcc; margin-top:0; font-weight:900; letter-spacing:1px;">DEVRİYE SAATİNİ SEÇİN</h3>
