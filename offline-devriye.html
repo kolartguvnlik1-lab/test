@@ -373,15 +373,15 @@ body { background-color: var(--bg-dark); color: var(--text-main); }
 </div>
 <div id="offlineLogin" role="dialog" aria-modal="true" aria-labelledby="offlineLoginTitle">
   <div class="ol-card">
-    <small style="letter-spacing:2px;color:#96b0ce">KOLART · ÇEVRİMDIŞI DEVRİYE</small>
-    <h2 id="offlineLoginTitle" style="font-size:25px;margin:18px 0 10px">Cihazdaki hesabınıza giriş yapın</h2>
-    <p>Paket telefonda hazırdır. Bu ekran internet olmadan çalışır.</p>
+    <small style="letter-spacing:2px;color:#96b0ce">KOD · OFFLİNE DEVRİYE</small>
+    <h2 id="offlineLoginTitle" style="font-size:25px;margin:18px 0 10px">Hesabınıza giriş yapın</h2>
+    <p> Bu ekran internet olmadan çalışır.</p>
     <form id="offlineLoginForm">
       <label for="offlineUsername">Kullanıcı adı</label>
       <input id="offlineUsername" name="username" autocomplete="username" required>
       <div id="offlineManagerGate" hidden>
-        <p id="offlineManagerHelp">Yöneticinizden 4 haneli şifre alın. Bu şifre, yeni paket sürümü yüklenene kadar yalnız bir kez istenir.</p>
-        <label for="offlineManagerPassword">Yöneticinin 4 haneli şifresi</label>
+        <p id="offlineManagerHelp">KOD Denetim Sorumlusundan 4 haneli OFFLİNE şifrenizi Alın. .</p>
+        <label for="offlineManagerPassword">4 haneli şifresi</label>
         <input id="offlineManagerPassword" name="managerPassword" type="password" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" autocomplete="off" aria-describedby="offlineManagerHelp" disabled>
       </div>
       <p id="offlineManagerHint"></p>
@@ -390,7 +390,7 @@ body { background-color: var(--bg-dark); color: var(--text-main); }
       <p id="offlineLoginMessage" role="status" aria-live="polite">Telefon paketi kontrol ediliyor…</p>
       <button type="submit" id="offlineLoginBtn">ÇEVRİMDIŞI GİRİŞ YAP</button>
     </form>
-    <button type="button" id="offlineLoginOnline" class="ol-link">İnternet varken giriş ekranını aç</button>
+    <button type="button" id="offlineLoginOnline" class="ol-link">ÇEVRİMİÇİ giriş ekranını aç</button>
   </div>
 </div>
 
