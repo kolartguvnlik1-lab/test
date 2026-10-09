@@ -1,4 +1,4 @@
-/* KOLART offline v4 — 20261008-2050. Bu sayfa hiçbir Firebase isteği göndermez. */
+/* KOLART offline: cihazda kayıt; merkeze gönderim yalnız butona basıldığında. */
 /* kolart-offline-access:4hane-v1 */
 (() => {
 'use strict';
@@ -19,24 +19,60 @@ function stateForSave() {
   return {patrolId,block:currentBlock,startTime:startTime?.toISOString(),readPoints,
     hedefSaat:secilenHedefSaat,equipment:eqStatus,meta:patrolMeta,routePoints:activeRoute};
 }
+const REMEMBER_PREFIX='kolart_offline_hatirla_v1|';
+const rememberKey=()=>REMEMBER_PREFIX+encodeURIComponent(localStorage.getItem('siteID') || '');
+function rememberedPreference() {
+  try{return JSON.parse(localStorage.getItem(rememberKey()) || 'null');}catch(_){return null;}
+}
+function remembered(candidate) {
+  const r=rememberedPreference();
+  return !!(r && candidate && r.id===candidate.id && r.siteID===candidate.siteID && r.uid===candidate.uid &&
+    r.version===candidate.version && r.createdAt===candidate.createdAt &&
+    r.profileHash===candidate.verifier?.hash && r.managerHash===candidate.managerVerifier?.hash &&
+    !window.KolartOffline.requiresManagerPassword(candidate));
+}
+function saveRememberPreference(candidate,enabled) {
+  if(!enabled){localStorage.removeItem(rememberKey());return;}
+  localStorage.setItem(rememberKey(),JSON.stringify({id:candidate.id,siteID:candidate.siteID,uid:candidate.uid,
+    username:candidate.username,version:candidate.version,createdAt:candidate.createdAt,
+    profileHash:candidate.verifier.hash,managerHash:candidate.managerVerifier.hash}));
+}
+async function unlockCandidate(candidate,epoch) {
+  await restorePatrol(candidate);
+  if(epoch!==loginEpoch)return false;
+  unlocked=true;
+  document.querySelector('.app-container').inert=false;
+  document.getElementById('offlineLogin').style.display='none';
+  document.getElementById('offlinePassword').value='';
+  document.getElementById('offlinePassword').type='password';
+  document.getElementById('offlinePasswordToggle').setAttribute('aria-pressed','false');
+  document.getElementById('offlinePasswordToggle').setAttribute('aria-label','Şifreyi göster');
+  document.getElementById('offlineManagerPassword').value='';
+  renderManagerPrompt(candidate);
+  document.getElementById('offlineLoginMessage').textContent='';
+  return true;
+}
 async function completedSnapshot(path) {
-  let value = window.KolartOffline.read(path).val() || {};
-  const reports = await window.KolartOfflineSync.list(siteID,currentUser.uid);
-  for (const record of reports) {
-    if (!record.log.okunanSayi || record.log.hedefSaat==='Belirtilmedi') continue;
-    const m=record.meta;
-    const prefix=`tamamlananDevriyeSaatleri/${m.shiftDate}${m.saatModu==='blok'?'/'+record.log.bolge:''}`;
-    if (prefix===path) value[record.log.hedefSaat]=record.log.name || record.log.user;
-  }
-  return {exists:()=>Object.keys(value).length>0,val:()=>value};
+  const parts=path.split('/'),mode=window.KolartOffline.read('sistemAyarlari/saatModu').val() || 'tekli';
+  const hours=await window.KolartOfflineSync.localCompleted({siteID,uid:currentUser.uid,shiftDate:parts[1],saatModu:mode},currentBlock);
+  const value=Object.fromEntries(hours.map(hour=>[hour,true]));
+  // Pakete alınan sunucu tamamlanma listesi burada kullanılmaz.
+  return {exists:()=>hours.length>0,val:()=>value};
 }
 async function refreshQueueLabel() {
-  const records = currentUser ? await window.KolartOfflineSync.list(siteID,currentUser.uid) : [];
-  document.getElementById('offlineUserLabel').textContent = currentUser
-    ? `${currentUser.name} · Telefonda bekleyen ${records.length} devriye` : '';
-  document.getElementById('offlineStateText').textContent = navigator.onLine
-    ? 'Bağlantı var. Bekleyen devriyeleri göndermek için giriş ekranına dönün.'
-    : 'İnternet yok. Devriyeler ve fotoğraflar bu telefona kaydedilir.';
+  const user=currentUser;
+  const pending=user ? await window.KolartOfflineSync.count(siteID,user.uid) : 0;
+  if(user!==currentUser)return;
+  const name=user?.name || user?.username || 'Devriye hesabı';
+  document.getElementById('offlineUserName').textContent=name;
+  document.getElementById('offlineUserAvatar').textContent=name.split(/\s+/).filter(Boolean).slice(0,2).map(n=>n[0]).join('').toLocaleUpperCase('tr-TR');
+  document.getElementById('offlineUserLabel').textContent=pending
+    ? `${pending} devriye gönderilmeyi bekliyor` : 'Devriye kayıtların bu cihazda saklanır';
+  document.getElementById('patrolDateLabel').textContent=new Date().toLocaleDateString('tr-TR',{day:'numeric',month:'long'});
+  const upload=document.getElementById('offlineUploadBtn');
+  upload.hidden=!navigator.onLine;
+  upload.disabled=!pending || isSyncOutboxRunning;
+  document.getElementById('offlineUploadCount').textContent=String(pending);
 }
 function stopPosition() {
   if(countdownInterval) {clearInterval(countdownInterval);countdownInterval=null;}
@@ -56,7 +92,7 @@ function renderManagerPrompt(candidate) {
   hint.textContent=candidate
     ? (required
       ? `${candidate.version} paketi için yönetici onayı gerekli.`
-      : `${candidate.version} paketi için yönetici şifresi onaylandı. Profil şifrenizi girin.`)
+      : `${candidate.version} · Yönetici onayı tamamlandı.`)
     : '';
 }
 function showLockedLogin() {
@@ -65,6 +101,7 @@ function showLockedLogin() {
   document.getElementById('offlineLogin').style.display='grid';
   document.getElementById('offlinePassword').value='';
   document.getElementById('offlineManagerPassword').value='';
+  document.getElementById('offlineRemember').checked=!!rememberedPreference();
   const candidate=window.KolartOffline.bundle;
   renderManagerPrompt(candidate);
   document.getElementById('offlineLoginMessage').textContent=
@@ -116,23 +153,36 @@ async function restorePatrol(candidate) {
 }
 async function bootLogin() {
   showLockedLogin();
+  const epoch=loginEpoch;
   const submit=document.getElementById('offlineLoginBtn'),message=document.getElementById('offlineLoginMessage');
-  submit.disabled=true;
+  submit.disabled=true;message.dataset.error='false';
   try {
     await window.KolartOfflineSync.open();
-    const candidate=await window.KolartOffline.last();
+    const preference=rememberedPreference();
+    let candidate=preference?.username
+      ? await window.KolartOffline.load(localStorage.getItem('siteID'),preference.username) : null;
+    if(!candidate)candidate=await window.KolartOffline.last();
+    if(epoch!==loginEpoch)return;
     if(!candidate) {
-      submit.disabled=true;
-      message.textContent='Bu cihaz için tamamlanmış paket bulunamadı. İnternet varken index’te giriş yapın ve “Çevrimdışı paket hazır” mesajını bekleyin.';
+      message.textContent='Hazır telefon paketi bulunamadı. İnternet varken ana giriş ekranından giriş yapıp paket hazırlığını tamamla.';
       return;
     }
     document.getElementById('offlineUsername').value=candidate.username;
     renderManagerPrompt(candidate);
-    submit.disabled=false;
+    if(remembered(candidate)) {
+      loginSubmitting=true;
+      message.textContent='Devriye hesabın açılıyor…';
+      try {await unlockCandidate(candidate,epoch);}finally{loginSubmitting=false;}
+      return;
+    }
+    if(preference)localStorage.removeItem(rememberKey());
+    document.getElementById('offlineRemember').checked=false;
     message.textContent=window.KolartOffline.requiresManagerPassword(candidate)
-      ? 'Yöneticinizden 4 haneli şifre alın. Yönetici şifresini ve kendi profil şifrenizi girin.'
-      : `${candidate.blocks.length} bölgenin paketi hazır. Devriye için profil şifrenizi girin.`;
-  } catch(error) {submit.disabled=true;message.textContent='Telefon hafızası açılamadı: '+error.message;}
+      ? 'Yönetici kodunu ve kendi profil şifreni gir.'
+      : 'Profil şifrenle devam edebilirsin.';
+  } catch(error) {
+    if(epoch===loginEpoch){message.dataset.error='true';message.textContent='Telefon paketi açılamadı: '+error.message;}
+  } finally {if(epoch===loginEpoch)submit.disabled=!window.KolartOffline.bundle;}
 }
 document.getElementById('offlineUsername').addEventListener('input',()=>{
   if(loginSubmitting)return;
@@ -151,6 +201,7 @@ document.getElementById('offlineUsername').addEventListener('input',()=>{
     const ready=await window.KolartOffline.intact(candidate);
     if(sequence!==previewEpoch || loginSubmitting)return;
     renderManagerPrompt(ready ? candidate : null);
+    document.getElementById('offlineRemember').checked=ready && remembered(candidate);
     submit.disabled=!ready;
     message.textContent=!ready
       ? 'Bu kullanıcı için tamamlanmış cihaz paketi bulunamadı. İnternet varken index’te giriş yapın.'
@@ -168,7 +219,7 @@ document.getElementById('offlineLoginForm').onsubmit=async event=>{
   event.preventDefault();
   const button=document.getElementById('offlineLoginBtn'),message=document.getElementById('offlineLoginMessage');
   if(button.disabled || loginSubmitting)return;
-  button.disabled=true;loginSubmitting=true;
+  button.disabled=true;loginSubmitting=true;message.dataset.error='false';
   const epoch=++loginEpoch;
   const inputs=['offlineUsername','offlinePassword','offlineManagerPassword'].map(id=>document.getElementById(id));
   inputs.forEach(input=>input.readOnly=true);
@@ -209,16 +260,15 @@ document.getElementById('offlineLoginForm').onsubmit=async event=>{
       }
       localStorage.removeItem(managerAttemptsKey);
     }
-    await restorePatrol(candidate);
+    const rememberEnabled=document.getElementById('offlineRemember').checked;
+    await unlockCandidate(candidate,epoch);
     if(epoch!==loginEpoch)return;
-    unlocked=true;
-    document.querySelector('.app-container').inert=false;
-    document.getElementById('offlineLogin').style.display='none';
-    document.getElementById('offlinePassword').value='';
-    document.getElementById('offlineManagerPassword').value='';
-    renderManagerPrompt(candidate);
-    message.textContent='';
-  } catch(error){if(epoch===loginEpoch)message.textContent=error.message;}
+    try{saveRememberPreference(candidate,rememberEnabled);}catch(_) {
+      showAppModal('Hatırlama kaydedilemedi','Bu cihazda tercih kaydedilemedi. Sonraki girişte şifren yeniden istenecek.','info');
+    }
+    // Tarayıcı destekliyorsa cihaz kayıtlarının kalıcı tutulmasını talep et.
+    if(navigator.storage?.persist)void navigator.storage.persist().catch(()=>{});
+  } catch(error){if(epoch===loginEpoch){message.dataset.error='true';message.textContent=error.message;}}
   finally {
     loginSubmitting=false;inputs.forEach(input=>input.readOnly=false);
     button.disabled=false;
@@ -268,18 +318,20 @@ window.checkEq = (tip, cevap) => {
     }
 };
 function uiStartMode() {
-    document.getElementById('backHomeBtn').style.display = "none";
+    document.getElementById('backHomeBtn').style.display = "flex";
     document.getElementById('startBtn').style.display = "none";
-    document.getElementById('endBtn').style.display = "block";
+    document.getElementById('endBtn').style.display = "flex";
     document.getElementById('incidentBtn').style.display = "none"; 
-    document.getElementById('statusLabel').innerText = "AKTİF DEVRİYE";
+    document.getElementById('statusLabel').innerText = "Devam ediyor";
+    document.getElementById('selectedHourStatus').textContent=(secilenHedefSaat || '')+' devriyesi';
 }
 function uiReadyMode() {
-    document.getElementById('backHomeBtn').style.display = "block";
-    document.getElementById('startBtn').style.display = "block";
+    document.getElementById('backHomeBtn').style.display = "flex";
+    document.getElementById('startBtn').style.display = "flex";
     document.getElementById('endBtn').style.display = "none";
     document.getElementById('incidentBtn').style.display = "none"; 
-    document.getElementById('statusLabel').innerText = "HAZIR";
+    document.getElementById('statusLabel').innerText = "Hazır";
+    document.getElementById('selectedHourStatus').textContent='Saat seçerek başlat';
     document.getElementById('timerDisplay').innerText = "00:00:00";
 }async function loadQRInterface() {
     // --- EKLENEN KISIM: Veri çekilmeden önce "Yükleniyor" veya "İnternet bekleniyor" mesajı ---
@@ -288,14 +340,14 @@ function uiReadyMode() {
         loadingContainer.innerHTML = `
             <div style="text-align: center; padding: 20px; color: #f39c12; font-weight: bold; display: flex; flex-direction: column; align-items: center; gap: 10px;">
                 <span class="material-symbols-outlined" style="font-size: 32px; animation: spin 2s linear infinite;">hourglass_empty</span>
-                <span>Veriler yükleniyor... İnternet bağlantınız yavaş lütfen bekleyiniz.</span>
+                <span>Kontrol noktaları hazırlanıyor…</span>
             </div>
         `;
     }
     // ------------------------------------------------------------------------------------------
 
     try {
-        document.getElementById('routeName').innerText = currentBlock.toUpperCase() + " ÇEVRESİ";
+        document.getElementById('routeName').innerText = currentBlock.toUpperCase() + "";
         const qrSnap = await get(ref(db, `${currentBlock}qrcodes`));
         const container = document.getElementById('qrListContainer');
         if (qrSnap.exists()) {
@@ -305,17 +357,18 @@ function uiReadyMode() {
             points.forEach(point => {
                 const isRead = readPoints.some(rp => rp.name.trim().toLocaleLowerCase('tr-TR') === point.name.trim().toLocaleLowerCase('tr-TR'));
                 const div = document.createElement('div');
-                div.className = 'qr-card';
+                div.className = 'qr-card';div.tabIndex=0;div.setAttribute('role','button');div.setAttribute('aria-label',point.name);
+                div.onkeydown=event=>{if(event.key==='Enter' || event.key===' '){event.preventDefault();div.click();}};
                 div.innerHTML = `
-                    <div class="qr-icon-side" style="${isRead ? 'background:#2ecc71' : ''}">
+                    <div class="qr-icon-side" style="${isRead ? 'background:#86d7b221;color:#86d7b2;border-color:#86d7b240' : ''}">
                         <span class="material-symbols-outlined">${isRead ? 'verified' : (isPhoneBroken ? 'touch_app' : 'qr_code_scanner')}</span>
                     </div>
                     <div class="qr-info">
                         <h3>${escapeHTML(point.name)}</h3>
                         <p class="${isRead ? 'completed' : 'waiting'}">
-                            ${isRead ? 'NOKTA DOĞRULANDI' : (isPhoneBroken ? 'DOKUN VE DOĞRULA ' : 'TARAMA BEKLENİYOR...')}
+                            ${isRead ? 'Nokta doğrulandı' : (isPhoneBroken ? 'Dokun ve doğrula' : 'QR kodu okut')}
                         </p>
-                    </div>
+                    </div><span class="point-arrow" aria-hidden="true">›</span>
                 `;
 
                 div.onclick = () => { 
@@ -363,7 +416,7 @@ function uiReadyMode() {
             errorContainer.innerHTML = `
                 <div style="text-align: center; padding: 20px; color: #e74c3c; font-weight: bold;">
                     <span class="material-symbols-outlined" style="font-size: 32px;">wifi_off</span><br>
-                    Bağlantı hatası oluştu. Lütfen internetinizi kontrol edip tekrar deneyin.
+                    Cihazdaki kontrol noktaları okunamadı. Tekrar deneyin.
                 </div>
             `;
         }
@@ -374,7 +427,9 @@ function refreshStats(totalCount = null) {
     const total = totalCount || document.querySelectorAll('.qr-card').length;
     const current = readPoints.length;
     const percent = total > 0 ? Math.round((current / total) * 100) : 0;
-    document.getElementById('percentText').innerText = `%${percent} TAMAMLANDI`;
+    document.getElementById('percentText').innerText = `%${percent} tamamlandı`;
+    document.getElementById('progressFill').style.width=Math.min(100,percent)+'%';
+    document.getElementById('patrolProgress').setAttribute('aria-valuenow',String(Math.min(100,percent)));
     document.getElementById('counterDisplay').innerText = `${current}/${total}`;
 }
 function updateUIVisually(pointName) {
@@ -384,10 +439,11 @@ function updateUIVisually(pointName) {
         const gelenIsim = pointName.trim().toLocaleLowerCase('tr-TR');
 
         if(kartIsmi === gelenIsim) {
-            card.querySelector('.qr-icon-side').style.background = '#2ecc71';
+            card.querySelector('.qr-icon-side').style.background = '#86d7b221';
+            card.querySelector('.qr-icon-side').style.color = '#86d7b2';
             card.querySelector('.material-symbols-outlined').innerText = 'verified';
             const p = card.querySelector('.qr-info p');
-            p.innerText = 'NOKTA DOĞRULANDI';
+            p.innerText = 'Nokta doğrulandı';
             p.className = 'completed';
             
             card.onclick = () => { 
@@ -403,13 +459,15 @@ function captureCameraFrame() {
         const video = document.querySelector("#reader video");
         if (!video) return null;
         const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
+        const width=video.videoWidth || 640,height=video.videoHeight || 480;
+        const scale=Math.min(1,720/Math.max(width,height));
+        canvas.width=Math.round(width*scale);canvas.height=Math.round(height*scale);
         canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
-        return canvas.toDataURL("image/jpeg", 0.4);
+        return canvas.toDataURL("image/jpeg", 0.48);
     } catch (e) { return null; }
 }
 async function openQRScanner(targetId, pointName) {
+    if(!unlocked || !devriyeStarted || isFinalizing || pointSaving || qrScanner || countdownInterval)return;
     document.getElementById('qrScannerModal').style.display = 'flex';
     qrScanner = new Html5Qrcode("reader", { useBarCodeDetectorIfSupported: false });
     
@@ -423,10 +481,10 @@ async function openQRScanner(targetId, pointName) {
                 launchSecurityOverlay(pointName, capturedPhoto);
             } else {
                 await closeScanner();
-                showAppModal("YANLIŞ NOKTA", `Okuttuğunuz kod bu noktaya (${pointName}) ait değil!`, "cancel");
+                showAppModal("YANLIŞ NOKTA", `Okuttuğunuz kod bu noktaya (${escapeHTML(pointName)}) ait değil!`, "cancel");
             }
         });
-    } catch (e) { showAppModal("HATA", "Kamera başlatılamadı."); }
+    } catch (e) { showAppModal("HATA", "QR okuyucu açılamadı. Tarayıcı izinlerini kontrol edip tekrar dene."); }
 
     document.getElementById('flashBtn').onclick = async () => {
         isFlashOn = !isFlashOn;
@@ -442,7 +500,7 @@ window.closeScanner = async () => {
     isFlashOn = false;
 };
 function launchSecurityOverlay(name, photo = null) {
-    if (isFinalizing) return;
+    if (!unlocked || !devriyeStarted || isFinalizing) return;
     const overlay = document.getElementById('securityOverlay');
     const num = document.getElementById('countdownNumber');
     overlay.style.display = 'flex';   
@@ -520,146 +578,48 @@ function startTimerLoop() {
     }, 1000);
 }
 window.openHourSelectModal = async () => {
-    const modal = document.getElementById('hourSelectModal');
-    const area = document.getElementById('hourListArea');
-    modal.style.display = 'flex';
-    area.innerHTML = `<div style="color:#00ffcc; padding:20px; font-weight:bold; text-align:center;">DEVRİYE SAATLERİ YÜKLENİYOR...</div>`;
-
-    // 1. TAM YÜKLENİRKEN ARKA PLANDA SESSİZCE KONTROL EDİLİYOR
-    const timeResult = {date:new Date(),isApi:false};
-    let d = timeResult.date;
-
-    // EĞER API'DEN CEVAP GELDİYSE VE TELEFONUN TARİH/SAATİ YANLIŞSA ANINDA ENGELLE!
-    if (timeResult.isApi) {
-        const cihazTarihi = new Date();
-        const cihazTarihStr = `${cihazTarihi.getFullYear()}-${cihazTarihi.getMonth()}-${cihazTarihi.getDate()}`;
-        const gercekTarihStr = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-
-        // Tarih eşleşmiyorsa veya Saat farkı 10 dakikadan fazlaysa patlat
-        const saatFarkiDk = Math.abs((cihazTarihi.getTime() - d.getTime()) / (1000 * 60));
-
-        if (cihazTarihStr !== gercekTarihStr || saatFarkiDk > 10) {
-            modal.style.display = 'none';
-            showAppModal(
-                "TARİH VE SAAT HATASI!", 
-                "Telefonunuzun Tarih ve Saati Yanlıştır!<br><br>Lütfen telefon ayarlarından <b>'Otomatik Tarih ve Saat'</b> seçeneğini aktif edip tekrar deneyiniz.", 
-                "error"
-            );
-            return;
-        }
+  if(!unlocked || devriyeStarted || isFinalizing)return;
+  const modal=document.getElementById('hourSelectModal'),area=document.getElementById('hourListArea');
+  modal.style.display='flex';area.innerHTML='<div class="hour-empty">Devriye saatleri hazırlanıyor…</div>';
+  const shiftDate=new Date();
+  if(shiftDate.getHours()<8)shiftDate.setDate(shiftDate.getDate()-1);
+  const vardiyaTarihi=window.KolartOffline.shiftKey(new Date()),isSunday=shiftDate.getDay()===0;
+  document.getElementById('hourDateLabel').textContent=shiftDate.toLocaleDateString('tr-TR',{day:'numeric',month:'long',year:'numeric'})+' · '+(isSunday?'Pazar planı':'Normal plan');
+  try {
+    const pazarSnap=isSunday ? await get(ref(db,'sistemAyarlari/pazarSaatleri')) : null;
+    const plan=pazarSnap?.exists() ? pazarSnap.val() : (await get(ref(db,'sistemAyarlari/planliSaatler'))).val();
+    const tumSaatler=Array.isArray(plan) ? [...new Set(plan)] : [];
+    const mode=(await get(ref(db,'sistemAyarlari/saatModu'))).val() || 'tekli';
+    const path='tamamlananDevriyeSaatleri/'+vardiyaTarihi+(mode==='blok'?'/'+currentBlock:'');
+    const bitenSaatler=(await completedSnapshot(path)).val();
+    const weight=saat=>{const [h,m]=saat.split(':').map(Number);return (h<8?h+24:h)*60+m;};
+    const secilebilirSaatler=tumSaatler.filter(saat=>/^([01]\d|2[0-3]):[0-5]\d$/.test(saat) && !bitenSaatler[saat]).sort((a,b)=>weight(a)-weight(b));
+    area.replaceChildren();
+    if(!secilebilirSaatler.length) {
+      const empty=document.createElement('div');empty.className='hour-empty';
+      empty.textContent=tumSaatler.length ? 'Bu vardiyanın tüm saatleri bu cihazda kaydedildi. Yeni vardiyada saatler yeniden görünecek.' : 'Bu güne ait planlı devriye saati bulunmuyor.';
+      area.appendChild(empty);return;
     }
-
-    // Vardiya Günü Hesaplama (Gece 08:00'a kadar olanı dünkü vardiya say)
-    let shiftDate = new Date(d);
-    if (shiftDate.getHours() < 8) { shiftDate.setDate(shiftDate.getDate() - 1); }
-    const vardiyaTarihi = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}-${String(shiftDate.getDate()).padStart(2, '0')}`;
-
-    const isSunday = shiftDate.getDay() === 0;
-    let tumSaatler = [];
-
-    try {
-        if (isSunday) {
-            const pazarSnap = await get(ref(db, 'sistemAyarlari/pazarSaatleri'));
-            if (pazarSnap.exists()) {
-                tumSaatler = pazarSnap.val();
-            } else {
-                const planliSnap = await get(ref(db, 'sistemAyarlari/planliSaatler'));
-                tumSaatler = planliSnap.exists() ? planliSnap.val() : [];
-            }
-        } else {
-            const planliSnap = await get(ref(db, 'sistemAyarlari/planliSaatler'));
-            tumSaatler = planliSnap.exists() ? planliSnap.val() : [];
-        }
-
-        const ayarSnap = await get(ref(db, 'sistemAyarlari/saatModu'));
-        const saatModu = ayarSnap.exists() ? ayarSnap.val() : 'tekli';
-        const tolSnap = await get(ref(db, 'sistemAyarlari/dakikaToleransi'));
-        const tolerans = tolSnap.exists() ? parseInt(tolSnap.val(), 10) : 0;
-
-        let tamamlananPath = `tamamlananDevriyeSaatleri/${vardiyaTarihi}`;
-
-        if (saatModu === 'blok') {
-            tamamlananPath += `/${currentBlock}`;
-        }
-
-        const tamamlananSnap = await completedSnapshot(tamamlananPath);
-        const bitenSaatler = tamamlananSnap.exists() ? tamamlananSnap.val() : {};
-
-        const secilebilirSaatler = tumSaatler.filter(saat => !bitenSaatler[saat]);
-        secilebilirSaatler.sort((a, b) => {
-            const saatA = parseInt(a.split(':')[0], 10);
-            const saatB = parseInt(b.split(':')[0], 10);
-            const agirlikA = saatA >= 8 ? saatA : saatA + 24;
-            const agirlikB = saatB >= 8 ? saatB : saatB + 24;
-            return agirlikA - agirlikB;
-        });
-
-        if (secilebilirSaatler.length > 0) {
-            area.innerHTML = "";
-            secilebilirSaatler.forEach(saat => {
-                const btn = document.createElement('button');
-                btn.style.cssText = "background:#222; color:#fff; border:1px solid #444; padding:15px; border-radius:10px; font-weight:bold; font-size:16px; width:45%; cursor:pointer; transition: 0.2s;";
-                btn.innerText = saat;
-                
-                btn.onmouseover = () => btn.style.borderColor = "#00ffcc";
-                btn.onmouseout = () => btn.style.borderColor = "#444";
-
-                btn.onclick = () => {
-                    if (!saat || typeof saat !== 'string' || !saat.includes(':')) {
-                        showAppModal("SİSTEM HATASI", "Devriye saat bilgisi hatalı!", "error");
-                        return;
-                    }
-
-                    // Saat hesaplamaları başlangıçta doğrulanan 'd' (veya cihaz) saati üzerinden yapılır
-                    const simdi = new Date();
-                    const suAnkiToplamDakika = (simdi.getHours() * 60) + simdi.getMinutes();
-                    
-                    const hedefParcalar = saat.split(':');
-                    const hedefToplamDakika = (parseInt(hedefParcalar[0], 10) * 60) + parseInt(hedefParcalar[1], 10);
-                    
-                    const devriyeBitisDakikasi = hedefToplamDakika + 59 + tolerans; 
-
-                    const bitisSaati = Math.floor((devriyeBitisDakikasi % 1440) / 60);
-                    const bitisDk = devriyeBitisDakikasi % 60;
-                    const formatliBitis = `${String(bitisSaati).padStart(2, '0')}:${String(bitisDk).padStart(2, '0')}`;
-
-                    let zamanDogruMu = false;
-                    if (devriyeBitisDakikasi < 1440) {
-                        if (suAnkiToplamDakika >= hedefToplamDakika && suAnkiToplamDakika <= devriyeBitisDakikasi) zamanDogruMu = true;
-                    } else {
-                        const kalanDakika = devriyeBitisDakikasi - 1440;
-                        if (suAnkiToplamDakika >= hedefToplamDakika || suAnkiToplamDakika <= kalanDakika) zamanDogruMu = true;
-                    }
-
-                    if (!zamanDogruMu) {
-                        showAppModal("GEÇERSİZ ZAMAN!", `${saat} devriyesini sadece ${saat} ile ${formatliBitis} saatleri arasında başlatabilirsiniz!`, "timer_off");
-                        return;
-                    }
-
-                    // Modal Onay İşlemi
-                    const confirmModal = document.getElementById('confirmPatrolModal');
-                    document.getElementById('confirmPatrolText').innerHTML = `<span style="color:#00ffcc; font-size:24px; text-shadow: 0 0 5px #00ffcc;">${saat}</span><br><br>Devriyesini başlatacaksınız.<br>Onaylıyor musunuz?`;
-                    confirmModal.style.display = 'flex';
-
-                    document.getElementById('btnConfirmOk').onclick = () => {
-                        confirmModal.style.display = 'none';
-                        secilenHedefSaat = saat;
-                        modal.style.display = 'none';
-                        document.getElementById('equipmentModal').style.display = 'flex';
-                    };
-
-                    document.getElementById('btnConfirmCancel').onclick = () => {
-                        confirmModal.style.display = 'none';
-                    };
-                };
-                area.appendChild(btn);
-            });
-        } else {
-            area.innerHTML = `<div style="color:#ff3b30; padding:20px; font-weight:bold;">TÜM DEVRİYELER ATILMIŞ!</div>`;
-        }
-    } catch(e) {
-        area.innerHTML = `<div style="color:#ff3b30; padding:20px;">PAKET VERİSİ OKUNAMADI!</div>`;
+    for(const saat of secilebilirSaatler) {
+      const button=document.createElement('button');button.type='button';button.className='hour-choice';
+      const title=document.createElement('strong');title.textContent=saat;
+      const label=document.createElement('span');label.textContent='Devriye için seç';button.append(title,label);
+      // Offline modda paketteki tüm saatler seçilebilir; eski zaman penceresi uygulanmaz.
+      button.onclick=()=>{
+        document.getElementById('confirmPatrolText').innerHTML=`<span class="confirm-hour">${saat}</span>Bu saat için devriyeye başlayacaksın.`;
+        const confirm=document.getElementById('confirmPatrolModal');confirm.style.display='flex';
+        document.getElementById('btnConfirmCancel').onclick=()=>{confirm.style.display='none';};
+        document.getElementById('btnConfirmOk').onclick=()=>{
+          confirm.style.display='none';modal.style.display='none';secilenHedefSaat=saat;
+          document.getElementById('equipmentModal').style.display='flex';
+        };
+      };
+      area.appendChild(button);
     }
+  } catch(error) {
+    area.innerHTML='<div class="hour-empty">Devriye saatleri cihazdan okunamadı. Tekrar deneyin.</div>';
+    console.warn('[Devriye saatleri]',error.message);
+  }
 };
 
 document.getElementById('startBtn').onclick=()=>{
@@ -728,13 +688,13 @@ async function finalizeOffline(note,missed) {
     startISO:startTime.toISOString(),points:structuredClone(readPoints),missedPoints:missed,
     ekipmanlar:{...eqStatus},status:missed.length?'Eksik Devriye':'TAM DEVRİYE',
     eksikNotu:note,okunanSayi:readPoints.length,toplamNokta:Object.keys(activeRoute || {}).length,
-    timestamp:Date.now(),dateKey};
+    timestamp:Date.now(),dateKey,'kayıt':'offline devriye'};
   try {
     await window.KolartOfflineSync.enqueue(log,patrolMeta);
     // IndexedDB işlemi tamamlanmadan ekran ve aktif devriye temizlenmez.
     devriyeStarted=false;isFinalizing=false;readPoints=[];startTime=null;secilenHedefSaat=null;activeRoute=null;
     uiReadyMode();await loadQRInterface();await refreshQueueLabel();
-    showAppModal('✓ TELEFONA KAYDEDİLDİ','Devriyeniz ve fotoğraflarınız telefon hafızasına kaydedildi. İnternet varken giriş ekranını açtığınızda otomatik yüklenecek.','check_circle');
+    showAppModal('Devriyen kaydedildi','Kayıt telefonunda saklanıyor. Merkeze aktarmak için internet varken “Verileri merkeze gönder” butonuna bas.','check_circle');
   } catch(error) {
     isFinalizing=false;startTimerLoop();
     showAppModal('KAYIT TAMAMLANAMADI','Aktif devriyeniz korunuyor. Tekrar bitirmeyi deneyin: '+escapeHTML(error.message),'error');
@@ -746,38 +706,126 @@ window.openBlockModal=async()=>{
   const area=document.getElementById('blockListArea');area.replaceChildren();
   for(const block of window.KolartOffline.bundle.blocks) {
     const button=document.createElement('button');button.textContent=block;
-    button.style.cssText='background:#222;color:#fff;border:1px solid #444;padding:18px;border-radius:16px;font-weight:bold';
+    button.type='button';button.className='block-choice';
     button.onclick=async()=>{currentBlock=block;secilenHedefSaat=null;document.getElementById('blockSelectModal').style.display='none';await loadQRInterface();};
     area.appendChild(button);
   }
   document.getElementById('blockSelectModal').style.display='flex';
 };
-const toIndex=()=>{
-  if(devriyeStarted){showAppModal('AKTİF DEVRİYE','Önce devriyenizi bitirip telefona kaydedin.','warning');return;}
-  if(!navigator.onLine){showAppModal('İNTERNET BAĞLANTISI YOK','Devriyeler telefonda korunuyor. İnternet gelince bu düğmeden giriş ekranını açın.','wifi_off');return;}
+async function toIndex() {
+  if(pointSaving || isFinalizing || isSyncOutboxRunning) {
+    showAppModal('İşlem sürüyor','Kaydın tamamlanmasını bekle.','hourglass_empty');return;
+  }
+  // Çıkış yalnız index.html'e yönlendirir. Auth/hatırlama/aktif kayıt silinmez.
+  stopPosition();await window.closeScanner();
   location.href=new URL('index.html',window.KolartOffline.base).href;
-};
-document.getElementById('offlineUploadBtn').onclick=toIndex;
+}
 document.getElementById('offlineLoginOnline').onclick=()=>{location.href=new URL('index.html',window.KolartOffline.base).href;};
-document.getElementById('backHomeBtn').onclick=toIndex;
-document.getElementById('offlineLockBtn').onclick=()=>void lockScreen();
+document.getElementById('backHomeBtn').onclick=()=>void toIndex();
+document.getElementById('offlinePasswordToggle').onclick=()=>{
+  const input=document.getElementById('offlinePassword'),button=document.getElementById('offlinePasswordToggle');
+  const show=input.type==='password';input.type=show?'text':'password';
+  button.setAttribute('aria-pressed',String(show));button.setAttribute('aria-label',show?'Şifreyi gizle':'Şifreyi göster');
+};
+document.getElementById('offlineRemember').addEventListener('change',event=>{
+  if(!event.target.checked)try{localStorage.removeItem(rememberKey());}catch(_){}
+});
+function within(promise,ms=30000) {
+  let timer;return Promise.race([promise,new Promise((_,reject)=>timer=setTimeout(()=>reject(new Error('Merkez bağlantısı zaman aşımına uğradı. Kayıtların telefonda korunuyor.')),ms))]).finally(()=>clearTimeout(timer));
+}
+function uploadError(error) {
+  if(/network|timeout/i.test(error.code || ''))return 'Merkeze ulaşılamadı. İnternet bağlantını kontrol edip yeniden gönder.';
+  if(/invalid-credential|wrong-password|user-not-found|invalid-login-credentials/i.test(error.code || ''))return 'Profil şifren hatalı. Tekrar dene.';
+  if(/too-many-requests/i.test(error.code || ''))return 'Çok fazla giriş denemesi yapıldı. Biraz bekleyip yeniden dene.';
+  return error.message || 'Gönderim tamamlanamadı. Kayıtların telefonunda korunuyor.';
+}
+async function requestUploadAuth(modules,connection,candidate) {
+  if(!connection.email)throw new Error('Çevrimiçi oturum bulunamadı. İnternet varken ana giriş ekranında aynı kullanıcıyla giriş yap; sonra bu ekranda gönder butonuna bas.');
+  window.KolartOfflineSync.hideModal();
+  const modal=document.getElementById('uploadAccessModal'),input=document.getElementById('uploadAccessPassword');
+  const button=document.getElementById('uploadAccessSubmit'),message=document.getElementById('uploadAccessMessage');
+  input.value='';message.textContent='';modal.style.display='flex';input.focus();
+  return new Promise(resolve=>{
+    let busy=false;
+    const finish=value=>{modal.style.display='none';input.value='';button.disabled=false;resolve(value);};
+    document.getElementById('uploadAccessCancel').onclick=()=>{if(!busy)finish(null);};
+    document.getElementById('uploadAccessForm').onsubmit=async event=>{
+      event.preventDefault();if(busy || !navigator.onLine)return;
+      busy=true;button.disabled=true;input.readOnly=true;message.textContent='Hesabın doğrulanıyor…';
+      try {
+        // Ana girişteki oturuma dokunmadan, yalnız bu gönderim için geçici Auth.
+        const name='kolart-offline-upload-'+candidate.uid;
+        const app=modules.app.getApps().find(a=>a.name===name) || modules.app.initializeApp(connection.options,name);
+        let auth;
+        try{auth=modules.auth.initializeAuth(app,{persistence:modules.auth.inMemoryPersistence});}catch(_){auth=modules.auth.getAuth(app);}
+        const credential=await within(modules.auth.signInWithEmailAndPassword(auth,connection.email,input.value));
+        if(credential.user.uid!==candidate.uid)throw new Error('Çevrimiçi hesap ile devriye hesabı eşleşmiyor. Ana giriş ekranında doğru hesabı kullan.');
+        finish({app,auth});
+      } catch(error){message.textContent=uploadError(error);}
+      finally{busy=false;button.disabled=false;input.readOnly=false;}
+    };
+  });
+}
+async function manualContext(candidate) {
+  const connection=candidate.connection;
+  if(!connection?.options?.apiKey || !connection.options.databaseURL)throw new Error('Merkez bağlantısını hazırlamak için internet varken ana giriş ekranında bir kez aynı kullanıcıyla giriş yap. Kayıtların telefonunda korunuyor.');
+  const version=/^\d+\.\d+\.\d+$/.test(connection.sdkVersion || '') ? connection.sdkVersion : '10.12.2';
+  const base='https://www.gstatic.com/firebasejs/'+version+'/';
+  // İnternet SDK'sı yalnız gönder butonuna basılınca yüklenir.
+  const [appModule,authModule,databaseModule,storageModule]=await within(Promise.all([
+    import(base+'firebase-app.js'),import(base+'firebase-auth.js'),import(base+'firebase-database.js'),import(base+'firebase-storage.js')
+  ]));
+  const modules={app:appModule,auth:authModule};
+  const appName=connection.appName || '[DEFAULT]';
+  let app=appModule.getApps().find(a=>a.name===appName && a.options.projectId===connection.options.projectId)
+    || appModule.initializeApp(connection.options,appName);
+  let auth=authModule.getAuth(app);
+  if(typeof auth.authStateReady==='function')await within(auth.authStateReady());
+  else await within(new Promise(resolve=>{const stop=authModule.onAuthStateChanged(auth,()=>{stop();resolve();});}));
+  if(auth.currentUser?.uid!==candidate.uid) {
+    const session=await requestUploadAuth(modules,connection,candidate);if(!session)return null;
+    ({app,auth}=session);
+  }
+  await within(auth.currentUser.getIdToken());
+  if(auth.currentUser?.uid!==candidate.uid)throw new Error('Devriye hesabını doğrulayarak yeniden gönder.');
+  return {siteID:candidate.siteID,app,auth,db:databaseModule.getDatabase(app),
+    ref:databaseModule.ref,update:databaseModule.update,getStorage:storageModule.getStorage,
+    sRef:storageModule.ref,uploadBytesResumable:storageModule.uploadBytesResumable,getDownloadURL:storageModule.getDownloadURL};
+}
+document.getElementById('offlineUploadBtn').onclick=async()=>{
+  if(!unlocked || !navigator.onLine || isSyncOutboxRunning)return;
+  if(pointSaving || isFinalizing || countdownInterval || qrScanner) {
+    showAppModal('Doğrulama sürüyor','Nokta kaydının tamamlanmasını bekle.','hourglass_empty');return;
+  }
+  isSyncOutboxRunning=true;
+  try {
+    await refreshQueueLabel();
+    const records=await window.KolartOfflineSync.queueSummary(siteID,currentUser.uid);
+    if(!records.length){showAppModal('Kayıtların güncel','Gönderilmeyi bekleyen devriye kaydın bulunmuyor.','check_circle');return;}
+    window.KolartOfflineSync.prepareManual(records);
+    const context=await manualContext(window.KolartOffline.bundle);
+    if(context)await window.KolartOfflineSync.sync(context,{userInitiated:true});
+  } catch(error) {
+    window.KolartOfflineSync.hideModal();
+    showAppModal('Gönderim tamamlanamadı',escapeHTML(uploadError(error)),'info');
+  } finally {isSyncOutboxRunning=false;await refreshQueueLabel();}
+};
 document.getElementById('incidentBtn').style.display='none';
 window.addEventListener('online',()=>void refreshQueueLabel());
 window.addEventListener('offline',()=>void refreshQueueLabel());
-// Geri/ileri önbelleğinden dönmek de yeni giriştir; profil şifresi saklanmaz.
+window.addEventListener('kolart-queue-change',()=>void refreshQueueLabel());
 window.addEventListener('pagehide',()=>{
   showLockedLogin();stopPosition();void window.closeScanner();
 });
-window.addEventListener('pageshow',event=>{
-  if(event.persisted)void bootLogin();
-});
+window.addEventListener('pageshow',event=>{if(event.persisted)void bootLogin();});
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden && (unlocked || loginSubmitting)) {
-    showLockedLogin();stopPosition();void window.closeScanner();
-  } else if(!document.hidden && !unlocked) {
-    const candidate=window.KolartOffline.bundle;
-    const username=document.getElementById('offlineUsername').value.trim().toLocaleUpperCase('tr-TR');
-    if(candidate && candidate.username===username)renderManagerPrompt(candidate);
+    // Hatırlanan girişte şifre isteme; çalışan nokta okuyucusunu kapat.
+    if(!remembered(window.KolartOffline.bundle) && !isSyncOutboxRunning)showLockedLogin();
+    stopPosition();void window.closeScanner();
+  } else if(!document.hidden) {
+    if(!unlocked && !loginSubmitting)void bootLogin();
+    else void refreshQueueLabel();
   }
 });
 // Dosya fonta veya başka bir CDN'e ihtiyaç duymaz.
