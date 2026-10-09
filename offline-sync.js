@@ -1,4 +1,4 @@
-/* KOLART: kalıcı çevrimdışı kuyruk ve index ekranında onaylı gönderim. */
+/* KOLART: kalıcı offline kayıtlar; yalnız açık kullanıcı isteğiyle gönderim. */
 (() => {
   'use strict';
   const BUILD = '20261008-2050';
@@ -7,11 +7,27 @@
   const clone = v => structuredClone(v);
   function open() {
     if (!opened) opened = new Promise((resolve,reject) => {
-      const request = indexedDB.open(databaseName,2);
-      request.onupgradeneeded = () => {
+      const request = indexedDB.open(databaseName,4);
+      request.onupgradeneeded = event => {
         const db = request.result;
-        for (const name of ['reports','active','leases','packages'])
+        for (const name of ['reports','active','leases','packages','completedSlots'])
           if (!db.objectStoreNames.contains(name)) db.createObjectStore(name,{keyPath:'id'});
+        const reports=request.transaction.objectStore('reports');
+        if(!reports.indexNames.contains('scope'))reports.createIndex('scope',['meta.siteID','meta.uid']);
+        if(!reports.indexNames.contains('site'))reports.createIndex('site','meta.siteID');
+        const slots=request.transaction.objectStore('completedSlots');
+        if(!slots.indexNames.contains('scope'))slots.createIndex('scope',['siteID','uid']);
+        // Eski kuyruğun saat işaretleri yükseltme işlemi içinde korunur.
+        if(event.oldVersion<3) {
+          const cursor=reports.openCursor();
+          cursor.onsuccess=()=>{
+            const row=cursor.result;if(!row)return;
+            if(row.value.log && row.value.meta) {
+              const slot=completedSlot(row.value.log,row.value.meta);if(slot)slots.put(slot);
+            }
+            row.continue();
+          };
+        }
       };
       request.onsuccess = () => {
         request.result.onversionchange = () => {request.result.close();opened=null;};
@@ -41,6 +57,31 @@
     });
     return all.filter(r=>r.meta.siteID===siteID && (!uid || r.meta.uid===uid)).sort((a,b)=>a.log.timestamp-b.log.timestamp);
   }
+  async function count(siteID,uid) {
+    return transaction(['reports'],'readonly',(tx,done)=>{
+      const store=tx.objectStore('reports'),index=store.index(uid?'scope':'site');
+      const request=index.count(IDBKeyRange.only(uid?[siteID,uid]:siteID));request.onsuccess=()=>done(request.result);
+    });
+  }
+  async function queueSummary(siteID,uid) {
+    const rows=await transaction(['reports'],'readonly',(tx,done)=>{
+      const result=[],index=tx.objectStore('reports').index(uid?'scope':'site');
+      const request=index.openCursor(IDBKeyRange.only(uid?[siteID,uid]:siteID));
+      request.onsuccess=()=>{
+        const row=request.result;
+        if(!row){done(result);return;}
+        const value=row.value;
+        result.push({id:value.id,meta:clone(value.meta),log:{dateKey:value.log.dateKey,timestamp:value.log.timestamp}});
+        row.continue();
+      };
+    });
+    return rows.sort((a,b)=>a.log.timestamp-b.log.timestamp);
+  }
+  async function report(id) {
+    return transaction(['reports'],'readonly',(tx,done)=>{
+      const request=tx.objectStore('reports').get(id);request.onsuccess=()=>done(request.result || null);
+    });
+  }
   async function packages(siteID) {
     const all = await transaction(['packages'],'readonly',(tx,done)=>{
       const request=tx.objectStore('packages').getAll();request.onsuccess=()=>done(request.result);
@@ -68,14 +109,36 @@
     }));
     return saving;
   }
+  function completedSlot(log,meta) {
+    if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(log.hedefSaat || ''))return null;
+    const block=meta.saatModu==='blok' ? log.bolge : '';
+    return {id:idFor(meta,[meta.shiftDate,meta.saatModu || 'tekli',block,log.hedefSaat].map(encodeURIComponent).join('|')),
+      siteID:meta.siteID,uid:meta.uid,shiftDate:meta.shiftDate,saatModu:meta.saatModu || 'tekli',
+      block,hour:log.hedefSaat,patrolId:log.patrolId,savedAt:Date.now()};
+  }
+  async function localCompleted(meta,block='') {
+    const slots=await transaction(['completedSlots'],'readonly',(tx,done)=>{
+      const r=tx.objectStore('completedSlots').index('scope').getAll(IDBKeyRange.only([meta.siteID,meta.uid]));r.onsuccess=()=>done(r.result);
+    });
+    const mode=meta.saatModu || 'tekli', matches=s=>s && s.siteID===meta.siteID && s.uid===meta.uid &&
+      s.shiftDate===meta.shiftDate && s.saatModu===mode && (mode!=='blok' || s.block===block);
+    const hours=new Set(slots.filter(matches).map(s=>s.hour));
+    // Eski raporların işaretleri depo yükseltmesinde eklenir; görseller okunmaz.
+    return [...hours];
+  }
   async function enqueue(log,meta) {
     if (!meta.siteID || !meta.uid || !meta.username || !log.patrolId || meta.username !== log.user) throw new Error('Devriye kimliği eksik');
     await saving;
-    const record={id:idFor(meta,log.patrolId),meta:clone(meta),log:clone(log),savedAt:Date.now()};
-    await transaction(['reports','active'],'readwrite',tx => {
+    const record={id:idFor(meta,log.patrolId),meta:clone(meta),log:{...clone(log),'kayıt':'offline devriye'},savedAt:Date.now()};
+    const slot=completedSlot(log,meta);
+    // Rapor, yerel saat işareti ve aktif devriye tek işlemde güncellenir.
+    // Gün/ay değişiminde raporlar silinmez; gönderim onayı beklenir.
+    await transaction(['reports','active','completedSlots'],'readwrite',tx => {
       tx.objectStore('reports').put(record);
+      if(slot)tx.objectStore('completedSlots').put(slot);
       tx.objectStore('active').delete(scope(meta));
     });
+    window.dispatchEvent(new CustomEvent('kolart-queue-change'));
     return record;
   }
   async function put(record) { await transaction(['reports'],'readwrite',tx=>tx.objectStore('reports').put(clone(record))); }
@@ -107,23 +170,23 @@
     if(dialog)return ui;
     const style=document.createElement('style');
     style.textContent=`#kolartSyncModal{position:fixed;inset:0;z-index:2147483646;display:none;place-items:center;background:rgba(3,9,19,.82);backdrop-filter:blur(14px);padding:20px;box-sizing:border-box;font-family:Inter,Arial,sans-serif;color:#f5f9ff}
-    #kolartSyncModal .ks-card{width:min(100%,430px);box-sizing:border-box;background:linear-gradient(145deg,#13223a,#081321);border:1px solid #294361;border-radius:28px;padding:28px;box-shadow:0 30px 100px #0009}
-    #kolartSyncModal .ks-tag{font-size:10px;letter-spacing:2px;color:#8caccf;font-weight:700;margin-bottom:18px}
-    #kolartSyncModal .ks-icon{width:58px;height:58px;display:grid;place-items:center;border-radius:19px;background:#1e395a;color:#7cc7ff;font-size:29px;margin-bottom:19px}
+    #kolartSyncModal .ks-card{width:min(100%,430px);box-sizing:border-box;background:linear-gradient(145deg,#203139,#121e25);border:1px solid #e5d0a329;border-radius:28px;padding:28px;box-shadow:0 30px 100px #0009}
+    #kolartSyncModal .ks-tag{font-size:10px;letter-spacing:2px;color:#afbbb7;font-weight:700;margin-bottom:18px}
+    #kolartSyncModal .ks-icon{width:58px;height:58px;display:grid;place-items:center;border-radius:19px;background:#e5d0a30e;color:#e5d0a3;border:1px solid #e5d0a330;font-size:29px;margin-bottom:19px}
     #kolartSyncModal h2{font-size:23px;line-height:1.2;margin:0 0 12px;letter-spacing:-.5px;color:#fff}
-    #kolartSyncModal .ks-text{font-size:13px;line-height:1.65;color:#b9c9dd;margin:0 0 18px}
+    #kolartSyncModal .ks-text{font-size:13px;line-height:1.65;color:#bacbd0;margin:0 0 18px}
     #kolartSyncModal .ks-dates{font-size:12px;line-height:1.7;color:#e4effc;background:#ffffff08;padding:12px 15px;border-radius:13px;max-height:105px;overflow:auto;margin-bottom:18px;white-space:pre-line}
     #kolartSyncModal .ks-track{height:10px;border-radius:20px;background:#23354d;overflow:hidden}
-    #kolartSyncModal .ks-bar{height:100%;width:0;background:linear-gradient(90deg,#489aff,#54ddc0);border-radius:20px;transition:width .25s ease}
+    #kolartSyncModal .ks-bar{height:100%;width:0;background:linear-gradient(90deg,#e5d0a3,#86d7b2);border-radius:20px;transition:width .25s ease}
     #kolartSyncModal .ks-row{display:flex;justify-content:space-between;font-size:11px;color:#a9bdd5;margin-top:10px;gap:12px}
     #kolartSyncModal .ks-actions{display:flex;gap:10px;margin-top:22px}
-    #kolartSyncModal button{cursor:pointer;border:0;border-radius:13px;padding:13px 17px;font-weight:700;font-size:12px;background:#3e99f8;color:#041626;flex:1}
+    #kolartSyncModal button{cursor:pointer;border:0;border-radius:13px;padding:13px 17px;font-weight:700;font-size:12px;background:#e5d0a3;color:#142024;flex:1}
     #kolartSyncModal button.ks-secondary{background:#24354c;color:#dae8f7}
     #kolartSyncModal button[hidden]{display:none}`;
     document.head.appendChild(style);
     dialog=document.createElement('div');dialog.id='kolartSyncModal';dialog.setAttribute('role','dialog');
     dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby','ks-title');
-    dialog.innerHTML='<div class="ks-card"><div class="ks-tag">KOLART · ÇEVRİMDIŞI KAYITLAR</div><div class="ks-icon" id="ks-icon">↑</div><h2 id="ks-title">Devriyeleriniz yükleniyor</h2><p class="ks-text" id="ks-text"></p><div class="ks-dates" id="ks-dates"></div><div class="ks-track" id="ks-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="ks-bar" id="ks-bar"></div></div><div class="ks-row"><span id="ks-step"></span><strong id="ks-percent">%0</strong></div><div class="ks-actions"><button id="ks-retry" hidden>Tekrar dene</button><button id="ks-close" class="ks-secondary" hidden>Giriş ekranına dön</button></div></div>';
+    dialog.innerHTML='<div class="ks-card"><div class="ks-tag">KOLART · ÇEVRİMDIŞI KAYITLAR</div><div class="ks-icon" id="ks-icon">↑</div><h2 id="ks-title">Devriyeleriniz yükleniyor</h2><p class="ks-text" id="ks-text"></p><div class="ks-dates" id="ks-dates"></div><div class="ks-track" id="ks-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="ks-bar" id="ks-bar"></div></div><div class="ks-row"><span id="ks-step"></span><strong id="ks-percent">%0</strong></div><div class="ks-actions"><button id="ks-retry" hidden>Tekrar dene</button><button id="ks-close" class="ks-secondary" hidden>Kapat</button></div></div>';
     document.body.appendChild(dialog);
     ui=Object.fromEntries(['icon','title','text','dates','track','bar','step','percent','retry','close'].map(id=>[id,document.getElementById('ks-'+id)]));
     ui.close.onclick=()=>{dialog.style.display='none';};
@@ -135,7 +198,7 @@
       const parts=String(d).split('-');return parts.length===3?`${parts[2]}.${parts[1]}.${parts[0]}`:String(d);
     });
     v.dates.textContent=dates.map(d=>d+' tarihli devriye kayıtlarınız').join('\n');
-    v.text.textContent=`Telefonda saklanan ${records.length} devriye kaydı Firebase'e aktarılıyor. Lütfen bu ekranı açık tutun.`;
+    v.text.textContent=`${records.length} devriye kaydı merkeze gönderiliyor. İşlem tamamlanana kadar bu ekranı açık tutun.`;
     v.retry.hidden=true;v.close.hidden=true;progress(0,'Gönderim hazırlanıyor');
   }
   function progress(percent,step) {
@@ -146,7 +209,7 @@
   function explain(error) {
     const code=error.code || '', message=error.message || String(error);
     if(/permission|unauthorized/i.test(code+' '+message)) return 'Firebase erişim izni reddedildi. Kayıtlar telefonda korunuyor.';
-    if(code==='AUTH_REQUIRED')return 'Kayıtları göndermek için aynı güvenlik hesabıyla giriş yapın. Girişten sonra yükleme otomatik başlayacak.';
+    if(code==='AUTH_REQUIRED')return 'Kayıtları göndermek için aynı güvenlik hesabıyla giriş yapın. Ardından “Verileri merkeze gönder” butonuna basın.';
     return 'Gönderim tamamlanamadı. Kayıtlar telefonda korunuyor. İnternet bağlantınızı kontrol edip tekrar deneyin.';
   }
   function failed(error,retry) {
@@ -182,11 +245,11 @@
     const points=record.log.points || [], count=points.filter(p=>p.offlineBase64&&!p.photoUrl).length;
     let sent=0;
     for(let i=0;i<points.length;i++)if(points[i].offlineBase64&&!points[i].photoUrl){
-      await photo(record,i,c,fraction=>onProgress(.8*(sent+fraction)/Math.max(1,count),'Fotoğraflar yükleniyor'));
+      await photo(record,i,c,fraction=>onProgress(.8*(sent+fraction)/Math.max(1,count),'Nokta kayıtları aktarılıyor'));
       sent++;
     }
     const {startISO,...historyLog}=record.log;
-    const cleanLog={...historyLog,points:points.map(({offlineBase64,...point})=>point)};
+    const cleanLog={...historyLog,'kayıt':'offline devriye',points:points.map(({offlineBase64,...point})=>point)};
     onProgress(.85,'Devriye raporu kaydediliyor');
     if(c.auth.currentUser?.uid!==record.meta.uid)throw Object.assign(new Error('Oturum değişti'),{code:'AUTH_REQUIRED'});
     const writes = {[`devriyeHistory/${cleanLog.dateKey}/${cleanLog.user}/${cleanLog.patrolId}`]:cleanLog};
@@ -202,7 +265,8 @@
     onProgress(1,'Kaydedildi');
   }
   async function confirmRecord(record,writes) {
-    await transaction(['reports','packages'],'readwrite',tx=>{
+    await transaction(['reports','packages','completedSlots'],'readwrite',tx=>{
+      const slot=completedSlot(record.log,record.meta);if(slot)tx.objectStore('completedSlots').put(slot);
       const store=tx.objectStore('packages'), request=store.get(record.meta.siteID+'|'+record.meta.uid);
       request.onsuccess=()=>{
         const pack=request.result;
@@ -218,60 +282,62 @@
         tx.objectStore('reports').delete(record.id);
       };
     });
+    window.dispatchEvent(new CustomEvent('kolart-queue-change'));
   }
   async function doSync(c) {
     if(!navigator.onLine)return false;
     const current=c.auth.currentUser;
     if(!current) {
-      const records=await list(c.siteID);
+      const records=await queueSummary(c.siteID);
       if(records.length){show(records,'Devriye kayıtlarınız bekliyor');failed(Object.assign(new Error('Giriş gerekli'),{code:'AUTH_REQUIRED'}),()=>{});return false;}
       return true;
     }
     return locked({siteID:c.siteID,uid:current.uid},async()=>{
-      const records=await list(c.siteID,current.uid);
+      const records=await queueSummary(c.siteID,current.uid);
       if(!records.length)return true;
       show(records);
       try {
         for(let i=0;i<records.length;i++){
           if(!navigator.onLine)throw new Error('İnternet kesildi');
-          await uploadRecord(records[i],c,(fraction,step)=>progress(Math.min(99,100*(i+fraction)/records.length),`${i+1}/${records.length} · ${step}`));
+          // Uzun kuyruktaki tüm görselleri aynı anda belleğe alma.
+          const currentRecord=await report(records[i].id);
+          if(currentRecord)await uploadRecord(currentRecord,c,(fraction,step)=>progress(Math.min(99,100*(i+fraction)/records.length),`${i+1}/${records.length} · ${step}`));
         }
         // Yeni kayıtlar başka sekmede eklenmişse ayrıca gösterilir; mevcut grubun tamamı onaylandı.
         progress(100,`${records.length} devriye başarıyla yüklendi`);
         ui.title.textContent='Devriyeleriniz kaydedildi';ui.icon.textContent='✓';
-        ui.text.textContent='Tüm gösterilen devriye kayıtları Firebase’e başarıyla ulaştı.';
-        await new Promise(resolve=>setTimeout(resolve,900));dialog.style.display='none';
+        ui.text.textContent='Devriye kayıtlarınız merkeze başarıyla ulaştı.';
+        ui.close.hidden=false;ui.close.textContent='Devriyeye dön';
         return true;
-      } catch(error) {console.warn('[Çevrimdışı kayıt gönderimi]',error.code || error.message);failed(error,()=>void sync(c));return false;}
+      } catch(error) {console.warn('[Çevrimdışı kayıt gönderimi]',error.code || error.message);failed(error,()=>void sync(c,{userInitiated:true}));return false;}
     });
   }
-  async function sync(c=indexContext) {
+  async function sync(c=indexContext,{userInitiated=false}={}) {
+    // Eski index'teki otomatik çağrılar giriş akışını engellemeden etkisiz kalır.
+    if(!userInitiated)return true;
     if(!c)return false;
     const key=c.siteID+'/'+(c.auth.currentUser?.uid || '');
     if(pendingSync) {
       if(pendingKey===key)return pendingSync;
-      return pendingSync.then(()=>sync(c));
+      return pendingSync.then(()=>sync(c,{userInitiated:true}));
     }
     pendingKey=key;
     pendingSync=doSync(c).catch(async error=>{
-      const records=await list(c.siteID,c.auth.currentUser?.uid);if(records.length)show(records,'Devriye kayıtlarınız bekliyor');
-      if(records.length)failed(error,()=>void sync(c));console.warn('[Kayıt kuyruğu]',error.message);return false;
+      const records=await queueSummary(c.siteID,c.auth.currentUser?.uid);if(records.length)show(records,'Devriye kayıtlarınız bekliyor');
+      if(records.length)failed(error,()=>void sync(c,{userInitiated:true}));console.warn('[Kayıt kuyruğu]',error.message);return false;
     }).finally(()=>{pendingSync=null;pendingKey=null;});
     return pendingSync;
   }
-  let detach;
   function attach(c) {
-    if(detach)detach();
+    // Oturum/bağlantı/sekme görünürlüğü artık gönderimi başlatmaz.
     indexContext=c;
-    const run=()=>{if(navigator.onLine)void sync(indexContext);};
-    const offAuth=c.onAuthStateChanged(c.auth,run);
-    window.addEventListener('online',run);
-
-    const visible=()=>{if(!document.hidden)run();};
-    document.addEventListener('visibilitychange',visible);
-    detach=()=>{offAuth();window.removeEventListener('online',run);document.removeEventListener('visibilitychange',visible);};
-    // İlk callback Firebase'in kalıcı oturumu geri yüklemesini bekler.
   }
+  function prepareManual(records) {
+    show(records,'Gönderim hazırlanıyor');
+    ui.text.textContent='Devriye hesabınız doğrulanıyor. Kayıtlar gönderim onaylanana kadar telefonda korunur.';
+    progress(0,'Merkez bağlantısı hazırlanıyor');
+  }
+  function hideModal() {if(dialog)dialog.style.display='none';}
   async function isOnline() {
     if(!navigator.onLine)return false;
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),4000);
@@ -280,5 +346,5 @@
       return response.ok;
     } catch(_){return false;}finally{clearTimeout(timer);}
   }
-  window.KolartOfflineSync={BUILD,open,list,active,saveActive,enqueue,sync,attach,isOnline,packages,putPackage};
+  window.KolartOfflineSync={BUILD,open,list,count,queueSummary,active,saveActive,enqueue,localCompleted,sync,attach,isOnline,packages,putPackage,prepareManual,hideModal};
 })();
