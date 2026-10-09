@@ -3,11 +3,12 @@
 
 const BUILD = '20261008-2050';
 const REVISION = '20261009-0030';
+const UI_REVISION = '20261009-elit-1';
 
 const BASE = new URL('./', self.location.href);
 
 const SHELL =
-  'kolart-offline-shell-v9-' + BUILD + '-' + REVISION;
+  'kolart-offline-shell-v4-' + BUILD + '-' + REVISION + '-' + UI_REVISION;
 
 const MARKER = new URL('__kolart_shell_v4', BASE).href;
 
@@ -37,11 +38,9 @@ let preparing;
 
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
-    // Giriş ekranı ilk çevrimiçi ziyarette saklanır.
-    // Güvenlik paketi girişten sonra hazırlanır.
-    await prepareIndex().catch(error => {
-      console.warn('[Index önbelleği]', error.message);
-    });
+    // Ekranların tamamı indirilmeden yeni servis etkinleşmez.
+    // Önceki paket önbellekleri ve IndexedDB kayıtları korunur.
+    await prepareShell(() => {}, true);
 
     await self.skipWaiting();
   })());
