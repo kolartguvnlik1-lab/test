@@ -1,398 +1,127 @@
 <!DOCTYPE html>
-<html lang="tr" class="dark">
+<html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KOLART — Çevrimdışı Devriye</title>
-    <!-- kolart-build:20261008-2050 -->
-    <!-- kolart-offline-access:4hane-v1 -->
-    <script defer src="./offline-sync.js?v=20261008-2050"></script>
-    <script defer src="./offline-paket.js?v=20261009-0030"></script>
-    <script defer src="./vendor/html5-qrcode.min.js"></script>
-    <script defer src="./offline-devriye.js?v=20261009-0030"></script>
-	<script>
-    const savedTheme = localStorage.getItem('kolart-theme-tone') || 'elite-neon';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-</script>
-    <style>
-        :root { --primary: #CCFF00; --bg: #080808; --card: #121212; --border: rgba(255,255,255,0.08); --error: #FF3B30; --text-dim: rgba(255,255,255,0.4); --warning: #f1c40f; }
-		/* TEMA TANIMLARI */
-:root {
-    /* Varsayılan olarak Elite Neon */
-    --primary: #CCFF00; --on-primary: #000; --bg-dark: #080808; --surface: #0C0C0C; --surface-container: #161616; --card-bg: #1a1f00; --card-border: #CCFF00; --primary-glow: rgba(204, 255, 0, 0.2);
-}
-
-html[data-theme="elite-neon"] { --primary: #CCFF00; --on-primary: #000; --bg-dark: #080808; --surface: #0C0C0C; --surface-container: #161616; --card-bg: #1a1f00; --card-border: #CCFF00; --primary-glow: rgba(204, 255, 0, 0.2); }
-html[data-theme="cyber-cyan"] { --primary: #00E5FF; --on-primary: #000; --bg-dark: #050A0C; --surface: #0A1013; --surface-container: #121A1D; --card-bg: #00191f; --card-border: #00E5FF; --primary-glow: rgba(0, 229, 255, 0.25); }
-html[data-theme="hex-purple"] { --primary: #bd00ff; --on-primary: #fff; --bg-dark: #08050a; --surface: #0c0a0e; --surface-container: #16121a; --card-bg: #17001f; --card-border: #bd00ff; --primary-glow: rgba(189, 0, 255, 0.25); }
-html[data-theme="deep-orange"] { --primary: #ff5500; --on-primary: #fff; --bg-dark: #0a0805; --surface: #0e0c0a; --surface-container: #1a1612; --card-bg: #1f0f00; --card-border: #ff5500; --primary-glow: rgba(255, 85, 0, 0.25); }
-html[data-theme="electric-blue"] { --primary: #0066ff; --on-primary: #fff; --bg-dark: #050608; --surface: #0a0b0d; --surface-container: #12141a; --card-bg: #000d1f; --card-border: #0066ff; --primary-glow: rgba(0, 102, 255, 0.25); }
-html[data-theme="matrix-green"] { --primary: #00ff66; --on-primary: #000; --bg-dark: #050805; --surface: #0a0d0a; --surface-container: #121a12; --card-bg: #001f0d; --card-border: #00ff66; --primary-glow: rgba(0, 255, 102, 0.25); }
-html[data-theme="ruby-red"] { --primary: #ff0055; --on-primary: #fff; --bg-dark: #080506; --surface: #0d0a0b; --surface-container: #1a1214; --card-bg: #1f000a; --card-border: #ff0055; --primary-glow: rgba(255, 0, 85, 0.25); }
-
-/* Global stilleri değişkenlerle güncelle */
-body { background-color: var(--bg-dark); color: var(--text-main); }
-.app-container { background-color: var(--surface); }
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-        body { background: var(--bg); color: #fff; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; }
-        
-        #offlineAlertBar { display: none; width: 100%; background: var(--error); color: white; text-align: center; padding: 15px 10px; font-size: 11px; font-weight: 900; position: sticky; top: 0; z-index: 10000; letter-spacing: 0.5px; border-bottom: 2px solid rgba(0,0,0,0.2); }
-
-        .app-container { width: 100%; max-width: 390px; min-height: 100vh; background: var(--bg); position: relative; padding-bottom: 120px; }
-        header { padding: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
-        .header-left { display: flex; align-items: center; gap: 8px; }
-        .header-left span.logo-text { font-weight: 900; font-size: 20px; letter-spacing: 1px; }
-        .header-right { text-align: right; }
-        .brand-sub { font-size: 10px; font-weight: 900; letter-spacing: 1px; }
-        .brand-sub .neon { color: var(--primary); }
-
-        .info-card { background: var(--card); margin: 8px 16px; padding: 18px; border-radius: 22px; border: 1px solid var(--border); }
-        .card-label { font-size: 9px; font-weight: 800; color: var(--text-dim); letter-spacing: 1.5px; margin-bottom: 6px; text-transform: uppercase; }
-        .route-title { font-size: 20px; font-weight: 900; margin-bottom: 12px; color: #fff; letter-spacing: -0.5px; }
-        
-        .progress-line { display: flex; justify-content: space-between; align-items: center; }
-        .percent-val { color: var(--primary); font-weight: 900; font-size: 13px; }
-        .time-val { color: #FFFFFF; font-size: 24px; font-weight: 900; font-family: monospace; text-shadow: 0 0 15px rgba(255,255,255,0.3); }
-
-        .stats-grid { display: flex; justify-content: space-between; align-items: flex-end; }
-        .counter-val { font-size: 32px; font-weight: 900; color: #fff; letter-spacing: -1px; }
-        .status-box { text-align: right; }
-        .status-box h4 { color: var(--primary); font-weight: 900; font-size: 11px; text-transform: uppercase; }
-
-        #qrListContainer { padding: 4px 16px; }
-        .qr-card { background: var(--card); border-radius: 16px; margin-bottom: 8px; display: flex; align-items: center; border: 1px solid var(--border); transition: 0.3s; padding: 6px; }
-        .qr-icon-side { background: var(--primary); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; margin-right: 12px; }
-        .qr-icon-side span { color: #000; font-size: 24px; font-weight: bold; }
-        .qr-info h3 { font-size: 14px; font-weight: 900; text-transform: uppercase; color: #fff; margin-bottom: 1px; }
-        .qr-info p { font-size: 10px; font-weight: 800; letter-spacing: 0.3px; }
-        .waiting { color: var(--primary); opacity: 0.8; }
-        .completed { color: #2ecc71; }
-
-        .patrol-footer { position: fixed; bottom: 0; width: 100%; max-width: 388px; padding: 24px; background: linear-gradient(0deg, rgba(8,8,8,1) 0%, rgba(8,8,8,0.8) 100%); border-top: 1px solid var(--border); z-index: 500; backdrop-filter: blur(20px); }
-        .action-btn { width: 100%; padding: 20px; border-radius: 22px; font-weight: 900; font-size: 15px; border: none; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; transition: 0.2s; }
-        #startBtn { background: var(--primary); color: #000; box-shadow: 0 10px 25px rgba(204, 255, 0, 0.3); }
-        #endBtn { background: #FFFFFF; color: #000; }
-
-        #securityOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 20000; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; }
-        #countdownNumber { font-size: 120px; font-weight: 900; color: var(--primary); font-family: monospace; line-height: 1; margin: 20px 0; }
-        
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 10000; flex-direction: column; align-items: center; justify-content: center; padding: 25px; }
-        .critical-box { background: #1a0a0a; border: 2px solid var(--error); padding: 30px; border-radius: 35px; width: 100%; max-width: 340px; text-align: center; }
-        
-        #incidentNote { width:100%; background:#000; border:1px solid #333; border-radius:12px; color:#fff; padding:12px; font-size:13px; height:80px; outline:none; resize:none; margin-top:10px; }
-        #forceFinishBtn:disabled { background: #222 !important; color: #444 !important; cursor: not-allowed; border: 1px solid #333; }
-        #forceFinishBtn:active {
-    transform: scale(0.96); /* İçeri çökme efekti */
-    filter: brightness(1.2); /* Basınca parlaması */
-}
-
-/* Buton aktif olduğunda hafifçe "hazırım" diye parlasın */
-#forceFinishBtn:not(:disabled) {
-    animation: pulseRed 2s infinite;
-    cursor: pointer;
-}
-
-@keyframes pulseRed {
-    0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.7); }
-    70% { box-shadow: 0 0 0 15px rgba(255, 59, 48, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
-}
-        .char-count { font-size: 10px; color: #ff3b30; font-weight: 800; margin-top: 5px; display: block; text-align: right; }
-
-        .custom-alert-box { background: var(--card); border: 1px solid var(--border); padding: 30px; border-radius: 30px; text-align: center; width: 100%; max-width: 320px; }
-        .custom-alert-btn { background: var(--primary); color: #000; border: none; padding: 15px 40px; border-radius: 15px; font-weight: 900; margin-top: 20px; cursor: pointer; text-transform: uppercase; width: 100%; }
-		.info-card { position: relative; } /* Kartın içindeki butonu hizalamak için */
-#eliteSelectBadge { 
-    display: none; 
-    position: absolute; 
-    top: 15px; 
-    right: 15px; 
-    background: var(--primary); 
-    color: #000; 
-    padding: 6px 12px; 
-    border-radius: 10px; 
-    font-size: 11px; 
-    font-weight: 900; 
-    cursor: pointer; 
-    box-shadow: 0 0 15px rgba(204, 255, 0, 0.4); 
-    z-index: 100;
-}
-@keyframes blinker {
-    50% { opacity: 0.3; }
-}
-@keyframes pulse {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.1); opacity: 0.7; }
-    100% { transform: scale(1); opacity: 1; }
-}
-/* İkonların dikeyde tam ortalanmasını sağlayan CSS */
-.action-btn .material-symbols-outlined {
-    font-size: 22px; /* İkon boyutu */
-    vertical-align: middle; /* Dikey hizalama */
-    line-height: 1; /* Satır yüksekliği */
-    margin-right: 10px; /* İkon ile yazı arasındaki boşluk */
-}
-/* İkonun kendi etrafında dönmesi için */
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Yazının canlı görünmesi için yumuşak saydamlık ve boyut hareketi */
-@keyframes pulseText {
-    0%, 100% { 
-        opacity: 1; 
-        transform: scale(1); 
-    }
-    50% { 
-        opacity: 0.4; 
-        transform: scale(0.97); 
-    }
-}
-/* Tüm sayfadaki metin ve öğelerin seçilmesini engeller */
-* {
-  -webkit-user-select: none; /* Safari, Chrome, Opera, Android */
-  -moz-user-select: none;    /* Firefox */
-  -ms-user-select: none;     /* Internet Explorer / Edge */
-  user-select: none;         /* Standart CSS */
-  
-  /* Mobil cihazlarda basılı tutunca çıkan vurguyu ve görsel kaydetme menüsünü engeller */
-  -webkit-touch-callout: none;
-  -webkit-tap-highlight-color: transparent;
-}
-    </style>
-<style>
- .material-symbols-outlined{font-family:Arial,sans-serif;font-style:normal;line-height:1;font-weight:bold;display:inline-block}
- #offlineLogin{position:fixed;inset:0;z-index:200000;background:#08111ef5;display:grid;place-items:center;padding:24px;box-sizing:border-box;overflow:auto;font-family:Arial,sans-serif}
- #offlineLogin .ol-card{width:min(100%,380px);background:#122034;border:1px solid #31435b;border-radius:26px;padding:25px;box-sizing:border-box;color:#fff}
- #offlineLogin input{width:100%;box-sizing:border-box;padding:15px;margin:8px 0;border-radius:12px;border:1px solid #3a4b63;background:#0b1626;color:#fff;font-size:16px}
- #offlineLogin button{width:100%;padding:15px;border-radius:12px;background:var(--primary);border:0;color:#000;font-weight:bold;margin-top:12px}
- #offlineLogin p{font-size:13px;line-height:1.7;color:#bfd0e3}
- #offlineLogin label{font-size:12px;color:#d8e5f5}
- #offlineLogin button:disabled{opacity:.5}
- #offlineLogin .ol-link{background:#283b53;color:#fff}
- #offlineLoginMessage{overflow-wrap:anywhere;min-height:24px}
- #offlineLogin[data-busy="true"] #offlineLoginBtn{pointer-events:none}
- #offlineManagerGate{margin:12px 0;padding:14px;border:1px solid #456143;border-radius:14px;background:#ccff000a}
- #offlineManagerGate[hidden]{display:none}
- #offlineManagerGate p{margin:0 0 8px;color:#d4e8bd}
- #offlineManagerHint{margin:0;font-size:12px}
- </style></head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c151a">
+  <title>KOLART · Offline Devriye</title>
+  <!-- kolart-build:20261008-2050 -->
+  <!-- kolart-offline-access:4hane-v1 -->
+  <!-- Mevcut offline paket/servis sürümüyle uyumludur. -->
+  <script defer src="./offline-sync.js?v=20261009-elit-1"></script>
+  <script defer src="./offline-paket.js?v=20261009-elit-1"></script>
+  <script defer src="./vendor/html5-qrcode.min.js"></script>
+  <script defer src="./offline-devriye.js?v=20261009-elit-1"></script>
+  <style>
+    :root{color-scheme:dark;--primary:#e5d0a3;--on-primary:#142024;--bg:#0c151a;--card:#152128;--border:#ffffff12;--text:#f3f5f3;--text-dim:#96a6ad;--success:#86d7b2;--error:#efa599;--warning:#e5d0a3}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;min-height:100%;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text)}
+    body{background:radial-gradient(ellipse at 15% 0%,#26362e66,transparent 45%),radial-gradient(ellipse at 100% 80%,#23434a33,transparent 50%),var(--bg)}
+    button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{cursor:default;opacity:.45}button{touch-action:manipulation}
+    button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--primary);outline-offset:4px}
+    [hidden]{display:none!important}svg{display:block;flex-shrink:0}button svg{width:20px;height:20px}
+    .material-symbols-outlined{font-family:Arial,sans-serif;font-style:normal;display:inline-block;line-height:1}
+    .app-container{width:100%;max-width:500px;margin:auto;min-height:100dvh;padding:0 20px calc(110px + env(safe-area-inset-bottom));background:linear-gradient(180deg,#111d22,#0c151a 65%)}
+    .masthead{display:flex;align-items:center;justify-content:space-between;padding:calc(24px + env(safe-area-inset-top)) 0 22px;border-bottom:1px solid var(--border)}
+    .brand{display:flex;align-items:center;gap:10px}.brand-mark{width:35px;height:40px;color:var(--primary)}.wordmark{font-size:19px;letter-spacing:3px;font-weight:750}.brand-caption{color:var(--text-dim);font-size:8px;letter-spacing:2px;margin-top:4px}
+    .date-tag{font-size:11px;color:#b4c2c6;letter-spacing:.4px;text-align:right;line-height:1.6}
+    .user-row{display:flex;align-items:center;gap:12px;padding:24px 0 20px}.user-avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:#e5d0a312;border:1px solid #e5d0a326;color:var(--primary);font-size:14px;font-weight:650;flex-shrink:0}
+    .user-copy{min-width:0;flex:1}.eyebrow{font-size:10px;letter-spacing:1.1px;color:var(--text-dim);margin:0 0 6px}.user-copy h1{font-size:17px;line-height:1.35;margin:0;font-weight:650;overflow-wrap:anywhere}.queue-label{font-size:11px;color:#a9b9bf;line-height:1.5;margin-top:5px}
+    .info-card{position:relative;border:1px solid var(--border);border-radius:24px;background:var(--card);padding:22px;margin:0 0 14px;box-shadow:0 12px 28px #00000010}
+    .route-card{background:radial-gradient(ellipse at 100% 0%,#e5d0a311,transparent 65%),linear-gradient(130deg,#1b2b32,#152128);border-color:#e5d0a325}
+    .card-label{margin:0 0 10px;font-size:10px;letter-spacing:1.2px;color:var(--text-dim);font-weight:550}
+    .route-title{margin:0 70px 22px 0;font-size:23px;font-weight:600;line-height:1.3;letter-spacing:-.5px;overflow-wrap:anywhere}
+    #eliteSelectBadge{display:none;position:absolute;right:20px;top:20px;border:1px solid #e5d0a32b;background:#e5d0a30a;color:var(--primary);font-size:11px;padding:8px 11px;border-radius:10px;font-weight:550}
+    .route-bottom{display:flex;align-items:end;justify-content:space-between;gap:12px}.percent-val{font-size:12px;font-weight:550;color:var(--success)}.timer-caption{display:block;color:var(--text-dim);font-size:10px;margin-bottom:6px;text-align:right}.time-val{font-size:25px;letter-spacing:1px;font-variant-numeric:tabular-nums;font-weight:500}
+    .progress-track{height:4px;border-radius:20px;background:#ffffff10;margin-top:17px;overflow:hidden}.progress-fill{height:100%;width:0;background:linear-gradient(90deg,#e5d0a3,#86d7b2);border-radius:inherit;transition:width .3s}
+    .stats-card{padding:18px 22px}.stats-grid{display:flex;justify-content:space-between;align-items:center}.stats-card .card-label{margin-bottom:7px}.counter-val{font-size:28px;font-weight:550;letter-spacing:-1px;font-variant-numeric:tabular-nums}.status-box{text-align:right}.status-box h4{margin:0;color:var(--success);font-size:11px;font-weight:600;display:flex;justify-content:end;align-items:center;gap:6px}.status-box h4:before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+    .section-row{display:flex;align-items:center;justify-content:space-between;padding:10px 3px 14px;gap:12px}.section-row h2{margin:0;font-size:13px;font-weight:600}.section-row p{margin:0;font-size:10px;color:var(--text-dim)}
+    .qr-card{display:flex;align-items:center;gap:14px;padding:15px;border-radius:18px;margin-bottom:9px;background:#152128b3;border:1px solid var(--border);cursor:pointer;transition:background .2s,border-color .2s}.qr-card:hover{background:#1b2a31;border-color:#e5d0a340}.qr-icon-side{width:43px;height:43px;display:grid;place-items:center;flex-shrink:0;border-radius:13px;background:#e5d0a30e;color:var(--primary);border:1px solid #e5d0a321}.qr-icon-side span{font-size:23px}.qr-info{flex:1;min-width:0}.qr-info h3{margin:0 0 5px;font-size:13px;letter-spacing:.2px;line-height:1.3;font-weight:650;overflow-wrap:anywhere}.qr-info p{margin:0;font-size:10px;line-height:1.4}.waiting{color:var(--text-dim)}.completed{color:var(--success)}.point-arrow{color:#6d828b;font-size:20px}
+    .upload-button{width:100%;margin:3px 0 20px;padding:16px 18px;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid #86d7b235;background:#86d7b20d;color:#a3e4c6;border-radius:17px;font-size:12px;font-weight:600;transition:background .2s}.upload-button:hover{background:#86d7b217}.upload-button .queue-count{font-size:10px;min-width:23px;padding:4px;border-radius:7px;background:#86d7b21a}
+    .patrol-footer{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:500px;padding:16px 20px calc(16px + env(safe-area-inset-bottom));background:#101b21ee;border-top:1px solid var(--border);backdrop-filter:blur(20px);z-index:500}.footer-actions{display:flex;gap:10px}.action-btn{display:flex;align-items:center;justify-content:center;gap:9px;min-height:55px;padding:13px;border-radius:16px;font-size:13px;font-weight:650;border:0;transition:transform .15s}.action-btn:active{transform:scale(.98)}#startBtn,#endBtn{flex:1.8;background:var(--primary);color:var(--on-primary)}#backHomeBtn{flex:1;background:#ffffff05;border:1px solid #ffffff16;color:#c8d3d6}#endBtn,#incidentBtn{display:none}.footer-note{font-size:9px;text-align:center;color:#6e858e;margin:11px 0 0;letter-spacing:.4px}
+    .modal,#hourSelectModal,#confirmPatrolModal{display:none;position:fixed;inset:0;z-index:10000;background:#051016d9;backdrop-filter:blur(15px);align-items:center;justify-content:center;padding:24px;overflow:auto}.dialog-card,.custom-alert-box,.critical-box{background:linear-gradient(145deg,#203139,#121e25);border:1px solid #ffffff16;border-radius:28px;width:100%;max-width:400px;padding:27px;box-shadow:0 30px 100px #0007;text-align:center;max-height:calc(100dvh - 48px);overflow:auto}.dialog-card h2,.dialog-card h3,.critical-box h2,.custom-alert-box h3{margin:0 0 12px;font-size:22px;letter-spacing:-.6px;font-weight:600}.dialog-copy{margin:0 0 20px;font-size:12px;line-height:1.7;color:#abbfc7}.dialog-emblem{width:54px;height:54px;display:grid;place-items:center;border:1px solid #e5d0a328;border-radius:17px;background:#e5d0a30c;margin:0 auto 20px;color:var(--primary);font-size:28px}
+    .primary-button,.custom-alert-btn{width:100%;border:0;border-radius:14px;padding:16px;background:var(--primary);color:var(--on-primary);font-size:13px;font-weight:650;cursor:pointer}.secondary-button{width:100%;border:1px solid #ffffff15;border-radius:14px;background:#ffffff04;color:#bbccd2;padding:14px;margin-top:10px;font-size:12px}.text-button{background:none;border:0;color:#91a8b2;font-size:12px;margin-top:20px;padding:8px 12px}.dual-actions{display:flex;gap:10px;margin-top:22px}.dual-actions button{flex:1;margin:0}.custom-alert-box p{font-size:13px;color:#bbccd2;line-height:1.7;overflow-wrap:anywhere;margin:0 0 22px}#appModalIcon{color:var(--primary);font-size:35px;margin-bottom:20px}
+    #incidentNote{width:100%;background:#0f1c23;border:1px solid #ffffff20;border-radius:13px;color:var(--text);padding:14px;font-size:14px;min-height:100px;resize:vertical;margin-top:10px}.char-count{display:block;text-align:right;color:#b5c7ce;font-size:11px;margin:7px 0 18px}#forceFinishBtn:disabled{opacity:.4}.field-label{display:block;text-align:left;margin:0 0 8px;color:#c0ced1;font-size:12px;font-weight:550}
+    #securityOverlay{display:none;position:fixed;inset:0;z-index:20000;background:#0b171bf5;align-items:center;justify-content:center;flex-direction:column;padding:30px;text-align:center}#securityOverlay h2{font-size:23px;font-weight:500;letter-spacing:-.4px;margin:0}#countdownNumber{font-size:100px;font-weight:350;line-height:1;letter-spacing:-6px;color:var(--primary);font-variant-numeric:tabular-nums;margin:30px 0}#securityOverlay p{max-width:280px;font-size:12px;color:#a9bdc5;line-height:1.8;margin:0}.location-pulse{color:var(--primary);width:65px;height:65px;margin-bottom:26px;border:1px solid #e5d0a337;border-radius:50%;display:grid;place-items:center;box-shadow:0 0 0 12px #e5d0a306}.location-pulse svg{width:28px;height:28px}.stay-note{margin-top:28px!important;background:#ffffff05;border:1px solid var(--border);border-radius:14px;padding:15px}
+    #reader{width:100%;border-radius:20px;overflow:hidden;min-height:200px;background:#0c151a}#qrScannerModal .dialog-card{padding:20px}#qrScannerModal h2{font-size:19px;margin:3px 0 15px}.scanner-actions{display:flex;gap:10px;margin-top:15px}.scanner-actions button{margin:0}.scanner-actions #flashBtn{width:50px;flex-shrink:0;border-radius:13px;border:1px solid #ffffff18;background:#ffffff06;color:var(--primary);font-size:22px}.capture-notice{font-size:11px;line-height:1.7;color:#bac9ce;margin:14px 4px 2px}
+    #blockListArea{display:flex;flex-direction:column;gap:9px;max-height:45dvh;overflow:auto}.block-choice{border:1px solid #ffffff16;background:#ffffff04;color:var(--text);padding:16px;border-radius:14px;font-size:14px;text-align:left}.block-choice:hover{border-color:#e5d0a350}
+    #hourListArea{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-height:48dvh;overflow:auto;padding:2px}.hour-choice{border:1px solid #e5d0a325;border-radius:16px;background:#e5d0a309;color:var(--text);padding:19px 12px;text-align:left}.hour-choice strong{display:block;font-size:25px;letter-spacing:.4px;font-weight:500;font-variant-numeric:tabular-nums}.hour-choice span{display:block;color:#9eafb5;font-size:10px;margin-top:7px}.hour-choice:hover{border-color:var(--primary);background:#e5d0a315}.hour-empty{grid-column:1/-1;color:#bdcccf;font-size:13px;line-height:1.7;padding:18px 5px}#hourDateLabel{font-size:11px;color:var(--primary);margin:0 0 20px}
+    .equipment-list{display:grid;gap:10px;text-align:left;margin-bottom:20px}.equipment-item{padding:15px;border:1px solid var(--border);background:#ffffff03;border-radius:16px}.equipment-item p{font-size:12px;color:#d5dfe1;margin:0 0 12px}.equipment-options{display:flex;gap:8px}.equipment-options button{flex:1;border:1px solid #ffffff20;border-radius:10px;padding:11px;background:none;color:white;font-size:11px;font-weight:550}#finalStartBtn{opacity:.3;pointer-events:none}#confirmPatrolText{font-size:14px;line-height:1.8;color:#c7d5da}.confirm-hour{display:block;color:var(--primary);font-size:42px;letter-spacing:1px;font-weight:400;margin-bottom:12px}
+    #offlineLogin{position:fixed;inset:0;z-index:200000;display:grid;place-items:center;background:radial-gradient(ellipse at 10% 0%,#3b493f55,transparent 52%),radial-gradient(ellipse at 100% 100%,#28546033,transparent 55%),#0c151a;padding:32px 24px;overflow:auto}
+    .ol-shell{width:100%;max-width:390px}.login-brand{display:flex;align-items:center;justify-content:center;gap:13px;margin:0 0 36px}.login-brand .brand-mark{width:38px;height:44px}.login-brand .wordmark{font-size:25px;letter-spacing:4px}.login-brand .brand-caption{font-size:9px;letter-spacing:2.5px;margin-top:6px}.ol-card{background:linear-gradient(145deg,#1c2b32ee,#142028ee);border:1px solid #e5d0a323;border-radius:28px;padding:27px;box-shadow:0 30px 80px #0003}
+    .login-kicker{display:flex;align-items:center;gap:7px;color:var(--primary);font-size:10px;letter-spacing:1.1px;margin:0 0 13px}.login-kicker:before{content:"";width:5px;height:5px;border-radius:50%;background:var(--success)}#offlineLoginTitle{font-size:28px;line-height:1.2;font-weight:550;letter-spacing:-.8px;margin:0 0 10px}.login-intro{font-size:12px;line-height:1.7;color:#9cb0ba;margin:0 0 26px}
+    .input-wrap{position:relative;margin-bottom:20px}.input-wrap>svg{position:absolute;left:14px;top:17px;width:18px;height:18px;color:#718b96;pointer-events:none}.input-wrap>input{width:100%;height:52px;background:#0d1a21;border:1px solid #ffffff13;border-radius:13px;color:#f5f7f6;font-size:14px;padding:15px 42px;outline:none}.input-wrap>input:focus{border-color:#e5d0a380;box-shadow:0 0 0 3px #e5d0a309}.input-wrap>input::placeholder{color:#5d7581}.password-toggle{position:absolute;right:6px;top:7px;height:38px;width:36px;background:transparent;color:#8ca6b0;border:0;display:grid;place-items:center}.password-toggle svg{width:17px;height:17px}.password-toggle[aria-pressed="true"]{color:var(--primary)}
+    #offlineManagerGate{border:1px solid #e5d0a32a;background:#e5d0a305;border-radius:16px;padding:16px;margin:0 0 20px}#offlineManagerHelp{font-size:11px;color:#b4c4c9;line-height:1.7;margin:0 0 14px}#offlineManagerGate .input-wrap{margin:0}#offlineManagerPassword{letter-spacing:6px}#offlineManagerHint{font-size:10px;line-height:1.7;color:#a2b7bf;margin:-4px 0 16px}#offlineManagerHint:empty{display:none}
+    .remember-row{display:flex;gap:11px;align-items:flex-start;padding:14px;border-radius:13px;border:1px solid #ffffff10;background:#ffffff03;cursor:pointer;margin-bottom:17px}.remember-row input{accent-color:var(--primary);width:18px;height:18px;margin:2px 0 0;flex-shrink:0}.remember-row strong{display:block;color:#d5e0e1;font-size:12px;font-weight:550}.remember-row small{display:block;margin-top:5px;color:#8da5af;font-size:10px;line-height:1.6}.remember-row:has(input:checked){border-color:#e5d0a355;background:#e5d0a308}
+    #offlineLoginMessage{min-height:18px;margin:0 0 17px;color:#9fb6c0;font-size:11px;line-height:1.7;overflow-wrap:anywhere}#offlineLoginMessage[data-error="true"]{color:var(--error)}#offlineLoginBtn{display:flex;align-items:center;justify-content:center;gap:13px}#offlineLoginOnline{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;font-size:11px;color:#a7bdc6;background:none;border:0;margin-top:20px;padding:6px}.login-bottom{margin:24px 0 0;text-align:center;font-size:9px;letter-spacing:1.3px;color:#627e89}
+    #uploadAccessModal input{width:100%;background:#0c1921;color:white;border:1px solid #ffffff20;border-radius:13px;padding:15px;font-size:16px;margin:0 0 12px}.access-status{font-size:12px;color:#a9bdc5;line-height:1.6;margin:0 0 16px}
+    #offlineLogin{align-items:safe center;justify-items:center}.ol-shell{margin-block:auto}
+    .ol-shell:has(#offlineManagerGate:not([hidden])) .login-brand{margin-bottom:23px}
+    .ol-shell:has(#offlineManagerGate:not([hidden])) .ol-card{padding:23px}
+    .ol-shell:has(#offlineManagerGate:not([hidden])) .login-intro{margin-bottom:18px}
+    .ol-shell:has(#offlineManagerGate:not([hidden])) .input-wrap{margin-bottom:16px}
+    .ol-shell:has(#offlineManagerGate:not([hidden])) .input-wrap>input{height:48px}
+    .ol-shell:has(#offlineManagerGate:not([hidden])) .input-wrap>svg{top:15px}
+    .ol-shell:has(#offlineManagerGate:not([hidden])) .password-toggle{top:5px}
+    #offlineManagerGate:not([hidden]){padding:12px;margin-bottom:16px}
+    #offlineManagerGate:not([hidden]) .input-wrap{margin-bottom:0}
+    #offlineManagerGate:not([hidden])+#offlineManagerHint{display:none}
+    @media(min-width:650px){.app-container{border-left:1px solid #ffffff08;border-right:1px solid #ffffff08}.ol-card{padding:32px}.login-brand{margin-bottom:42px}}
+    @media(max-width:360px){.app-container{padding-left:15px;padding-right:15px}.patrol-footer{padding-left:15px;padding-right:15px}.route-title{font-size:20px}.wordmark{font-size:17px}.ol-card{padding:22px}#offlineLogin{padding:25px 18px}.login-brand{margin-bottom:25px}.action-btn{font-size:12px}}
+    @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+  </style>
+</head>
 <body>
-
-<div id="offlineAlertBar" style="display:block">
-  <div style="font-size:13px;margin-bottom:4px">TELEFONA KAYIT MODU</div>
-  <div id="offlineStateText" style="font-size:11px;font-weight:400;text-transform:none">Devriyeler bu cihaza kaydedilir. İnternet varken index açılınca yüklenir.</div>
-  <div id="offlineUserLabel" style="margin-top:5px;font-size:11px"></div>
-  <div style="margin-top:8px;display:flex;justify-content:center;gap:10px">
-    <button id="offlineUploadBtn" style="padding:8px 12px;border:0;border-radius:8px;font-weight:bold">Giriş ekranına dön / Yükle</button>
-    <button id="offlineLockBtn" style="padding:8px 12px;border:0;border-radius:8px;font-weight:bold">Güvenli Ekran</button>
-  </div>
+<div class="app-container" inert>
+  <header class="masthead">
+    <div class="brand"><svg class="brand-mark" viewBox="0 0 32 38" fill="none" aria-hidden="true"><path d="M16 2 29 7v11c0 8-6 14-13 18C9 32 3 26 3 18V7L16 2Z" stroke="currentColor" stroke-width="1.5"/><path d="m11 14 5 5 7-8M16 19v8" stroke="currentColor" stroke-width="1.5"/></svg><div><div class="wordmark">KOLART</div><div class="brand-caption">GÜVENLİK & DENETİM</div></div></div>
+    <div id="patrolDateLabel" class="date-tag"></div>
+  </header>
+  <section class="user-row" aria-label="Güvenlik görevlisi">
+    <div id="offlineUserAvatar" class="user-avatar" aria-hidden="true">K</div>
+    <div class="user-copy"><p class="eyebrow">Offline devriye kaydı</p><h1 id="offlineUserName">Devriye hesabı</h1><div id="offlineUserLabel" class="queue-label" aria-live="polite"></div></div>
+  </section>
+  <button type="button" id="offlineUploadBtn" class="upload-button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M7 17H5a4 4 0 0 1-.4-8A7 7 0 0 1 18 8a4.5 4.5 0 0 1 1 9h-2M12 21V11m-4 4 4-4 4 4"/></svg><span>Verileri merkeze gönder</span><span id="offlineUploadCount" class="queue-count">0</span></button>
+  <section class="info-card route-card">
+    <button type="button" id="eliteSelectBadge" onclick="openBlockModal()">Bölge seç</button>
+    <p class="card-label">DEVRİYE ROTASI</p><h2 class="route-title" id="routeName">Rota hazırlanıyor</h2>
+    <div class="route-bottom"><span class="percent-val" id="percentText">%0 tamamlandı</span><div><span class="timer-caption">Devriye süresi</span><span class="time-val" id="timerDisplay">00:00:00</span></div></div>
+    <div class="progress-track" role="progressbar" id="patrolProgress" aria-label="Devriye ilerlemesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progressFill" class="progress-fill"></div></div>
+  </section>
+  <section class="info-card stats-card"><div class="stats-grid"><div><p class="card-label">KONTROL NOKTALARI</p><div class="counter-val" id="counterDisplay">0/0</div></div><div class="status-box"><p class="card-label">DURUM</p><h4 id="statusLabel">Hazır</h4></div></div></section>
+  <div class="section-row"><h2>Kontrol noktaları</h2><p id="selectedHourStatus">Saat seçerek başlat</p></div>
+  <div id="qrListContainer"></div>
+  <footer class="patrol-footer"><div class="footer-actions">
+    <button type="button" id="startBtn" class="action-btn" disabled><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m8 5 12 7-12 7V5Z"/></svg><span>Devriyeyi başlat</span></button>
+    <button type="button" id="endBtn" class="action-btn"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg><span>Devriyeyi bitir</span></button>
+    <button type="button" id="backHomeBtn" class="action-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 5H5v14h5m0-7h10m-4-4 4 4-4 4"/></svg><span>Çıkış</span></button>
+    <button type="button" id="incidentBtn" hidden>Olay bildir</button>
+  </div><p class="footer-note">KOLART GÜVENLİK · DEVRİYE TAKİBİ</p></footer>
 </div>
-<div class="app-container">
-    <header>
-        <div class="header-left">
-            <span class="material-symbols-outlined" style="color:var(--primary); font-variation-settings: 'FILL' 1;">shield</span>
-            <span class="logo-text">KOD</span>
-        </div>
-        <div class="header-right">
-            <div class="brand-sub"><span class="neon">KOLART</span> ÇEVRİMDIŞI DEVRİYE</div>
-        </div>
-    </header>
-
-<div class="info-card">
-    <div id="eliteSelectBadge" onclick="openBlockModal()">SEÇ</div>
-        <p class="card-label">AKTİF DEVRİYE ROTASI</p>
-        <h2 class="route-title" id="routeName">YÜKLENİYOR...</h2>
-        <div class="progress-line">
-            <span class="percent-val" id="percentText">%0 TAMAMLANDI</span>
-            <span class="time-val" id="timerDisplay">00:00:00</span>
-        </div>
-    </div>
-
-    <div class="info-card" style="padding: 15px 18px;">
-        <div class="stats-grid">
-            <div>
-                <p class="card-label">KONTROL NOKTALARI</p>
-                <div class="counter-val" id="counterDisplay">0/0</div>
-            </div>
-            <div class="status-box">
-                <p class="card-label" style="margin-bottom:2px;">DURUM</p>
-                <h4 id="statusLabel">HAZIR</h4>
-            </div>
-        </div>
-    </div>
-
-    <div id="qrListContainer"></div>
-
-<div class="patrol-footer">
-    <div style="display: flex; gap: 12px; width: 100%; align-items: stretch; justify-content: center;">
-        
-        <button id="backHomeBtn" class="action-btn" style="background: #1a1a1a; color: #fff; border: 1.5px solid var(--border); flex: 1; min-height: 56px; display: flex; align-items: center; justify-content: center; padding: 0 15px; border-radius: 20px;">
-            <span class="material-symbols-outlined">home</span>
-            <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">ANASAYFA</span>
-        </button>
-
-       <button id="startBtn" class="action-btn" disabled style="background: var(--primary); color: #000; flex: 1; min-height: 56px; display: flex; align-items: center; justify-content: center; padding: 0 15px; border-radius: 20px; opacity: 0.4; cursor: not-allowed; pointer-events: none;">
-    <span class="material-symbols-outlined">play_circle</span>
-    <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">BAŞLAT</span>
-</button>
-
-        <button id="endBtn" class="action-btn" style="background: #fff; color: #000; flex: 1; min-height: 56px; display: none; align-items: center; justify-content: center; padding: 0 15px; border-radius: 20px;">
-            <span class="material-symbols-outlined">stop_circle</span>
-            <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">BİTİR</span>
-        </button>
-
-        <button id="incidentBtn" class="action-btn" style="background: #1a1a1a; color: #ff3b30; border: 1px solid #ff3b30; flex: 1; min-height: 56px; display: none; align-items: center; justify-content: center; padding: 0 15px; border-radius: 20px;">
-            <span class="material-symbols-outlined">report</span>
-            <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">OLAY BİLDİR</span>
-        </button>
-
-    </div>
-</div>
-
-<div id="appModal" class="modal">
-    <div class="custom-alert-box">
-        <span id="appModalIcon" class="material-symbols-outlined" style="font-size: 50px; color: var(--primary); margin-bottom: 15px;">info</span>
-        <h3 id="appModalTitle" style="font-weight: 900; margin-bottom: 10px;">BİLGİ</h3>
-        <p id="appModalText" style="font-size: 13px; opacity: 0.8; line-height: 1.5;"></p>
-        <button class="custom-alert-btn" onclick="closeAppModal()">TAMAM</button>
-    </div>
-</div>
-
-<div id="confirmModal" class="modal">
-    <div class="critical-box">
-        <span class="material-symbols-outlined" style="font-size: 60px; color: #f1c40f;">report_problem</span>
-        <h2 style="color:#f1c40f; font-size: 20px; margin-top:10px;">EKSİK NOKTA !</h2>
-        <p style="font-size:13px; color:#fff; opacity:0.9; margin-top:15px; line-height:1.5;">
-            Rotadaki tüm noktaları okutmadığınız için devriyeyi normal şekilde bitiremezsiniz. 
-            <br><br>
-            <b>Neden okutmadığınızı şirkete bildirmeniz gerekmektedir.</b>
-        </p>
-        <div id="incidentArea" style="margin-top:20px; text-align:left;">
-            <p style="font-size:10px; color:var(--primary); font-weight:900; text-transform:uppercase;">Eksik Nokta Sebebi (Zorunlu)</p>
-            <textarea id="incidentNote" placeholder="Örn: C blok girişi kilitli olduğu için girilemedi..."></textarea>
-            <span id="charWarning" class="char-count">En az 15 karakter yazmalısınız!</span>
-        </div>
-<button id="forceFinishBtn" disabled style="width:100%; background:var(--error); color:#fff; border:none; padding:18px; border-radius:20px; font-weight:900; margin-top:20px; text-transform:uppercase; display:flex; align-items:center; justify-content:center; gap:8px;">
-    <span class="material-symbols-outlined" id="finishIcon">send_and_archive</span>
-    <span id="finishText">Devriyeyi Bitir / Telefona Kaydet</span>
-</button>
-        <button onclick="document.getElementById('confirmModal').style.display='none'" style="width:100%; background:rgba(255,255,255,0.1); color:#fff; border:none; padding:15px; border-radius:20px; font-weight:700; margin-top:10px;">DEVRİYEYE DEVAM ET</button>
-    </div>
-</div>
-
-<div id="securityOverlay">
-    <span class="material-symbols-outlined" style="color:var(--primary); font-size: 56px; margin-bottom: 15px; animation: pulse 1s infinite;">fmd_bad</span>
-    <p style="color:#fff; font-weight:900; text-transform:uppercase; font-size:16px; letter-spacing:1px;">OKUTULAN NOKTANIN KONUMU TELEFONA KAYDEDİLİYOR…</p>
-    
-<div id="countdownNumber" style="text-shadow: 0 0 30px var(--primary);">10</div>
-    
-    <div style="background: rgba(204, 255, 0, 0.1); border: 1px solid var(--primary); padding: 15px; border-radius: 15px; margin: 10px 0;">
-        <p style="color:var(--primary); font-size:11px; font-weight:900; text-transform:uppercase; line-height:1.4;">
-            UYDU BAĞLANTISI KURULUYOR... <br>
-            KONUM BİLGİLERİ TELEFONA KAYDEDİLİYOR.
-        </p>
-    </div>
-
-    <p style="color:var(--error); font-size:11px; font-weight:900; margin-top:15px; border:2px solid var(--error); padding:12px; border-radius:12px; background: rgba(255, 59, 48, 0.1); animation: blinker 0.8s linear infinite;">
-        ⚠️ DİKKAT: NOKTADAN AYRILMAYIN! <br>
-        ERKEN AYRILMA DURUMUNDA "GEÇERSİZ TARAMA" RAPORU OLUŞTURULUR.
-    </p>
-</div>
-
-<div id="blockSelectModal" class="modal">
-    <div style="background:var(--card); padding:30px; border-radius:35px; border:1px solid var(--border); width:100%; max-width:340px; text-align:center;">
-        <h3 style="color:var(--primary); margin-bottom:20px; font-weight:900;">BÖLGE / BLOK SEÇ</h3>
-        <div id="blockListArea" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;"></div>
-        <button onclick="document.getElementById('blockSelectModal').style.display='none'" style="margin-top:20px; color:var(--text-dim); background:none; border:none; font-weight:bold;">KAPAT</button>
-    </div>
-</div>
-
-<div id="qrScannerModal" class="modal">
-    <div id="reader" style="width:100%; max-width:320px; border-radius:30px; overflow:hidden; border:4px solid var(--primary);"></div>
-    <div style="margin-top:30px; display:flex; gap:20px;">
-        <button id="flashBtn" style="background:#222; color:#fff; border:none; width:60px; height:60px; border-radius:20px; display:flex; align-items:center; justify-content:center;"><span class="material-symbols-outlined">flashlight_on</span></button>
-        <button onclick="closeScanner()" style="background:var(--error); color:#fff; border:none; padding:0 30px; border-radius:20px; font-weight:900;">İPTAL</button>
-    </div>
-</div>
-<div id="equipmentModal" class="modal" style="display:none; z-index: 10001; background:rgba(0,0,0,0.9); position:fixed; top:0; left:0; width:100%; height:100%; align-items:center; justify-content:center;">
-    <div style="background:#111; padding:30px; border-radius:30px; border:1px solid #333; width:90%; max-width:350px; text-align:center;">
-        <span class="material-symbols-outlined" style="font-size: 50px; color: var(--primary); margin-bottom: 15px;">security</span>
-        <h3 style="color:#fff; margin-bottom:20px; font-weight:900;">GÜVENLİK KONTROLÜ</h3>
-        
-        <div style="text-align:left; gap:15px; display:flex; flex-direction:column;">
-            <div style="background:#1a1a1a; padding:15px; border-radius:15px; border: 1px solid rgba(204, 255, 0, 0.1);">
-                <p style="font-size:11px; color:var(--primary); font-weight:900; margin-bottom:10px;">0. GPS / KONUM SERVİSİNİ AÇTIN MI?</p>
-                <div style="display:flex; gap:10px;">
-                    <button onclick="checkEq('gps', true)" id="gpsEvet" style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:none; color:#fff; font-weight:bold; font-size:12px;">EVET</button>
-                    <button onclick="checkEq('gps', false)" id="gpsHayir" style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:none; color:#fff; font-weight:bold; font-size:12px;">HAYIR</button>
-                </div>
-            </div>
-
-            <div style="background:#1a1a1a; padding:15px; border-radius:15px;">
-                <p style="font-size:11px; color:var(--primary); font-weight:900; margin-bottom:10px;">1. EL FENERİNİ ALDIN MI?</p>
-                <div style="display:flex; gap:10px;">
-                    <button onclick="checkEq('fener', true)" id="fenerEvet" style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:none; color:#fff; font-weight:bold; font-size:12px;">EVET</button>
-                    <button onclick="checkEq('fener', false)" id="fenerHayir" style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:none; color:#fff; font-weight:bold; font-size:12px;">HAYIR</button>
-                </div>
-            </div>
-
-            <div style="background:#1a1a1a; padding:15px; border-radius:15px;">
-                <p style="font-size:10px; color:var(--primary); font-weight:900; margin-bottom:10px;">2. REFLEKTÖR YELEĞİNİ GİYDİN Mİ?</p>
-                <div style="display:flex; gap:10px;">
-                    <button onclick="checkEq('yelek', true)" id="yelekEvet" style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:none; color:#fff; font-weight:bold; font-size:12px;">EVET</button>
-                    <button onclick="checkEq('yelek', false)" id="yelekHayir" style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:none; color:#fff; font-weight:bold; font-size:12px;">HAYIR</button>
-                </div>
-            </div>
-        </div>
-
-        <button id="finalStartBtn" style="width:100%; background:var(--primary); color:#000; border:none; padding:18px; border-radius:20px; font-weight:900; margin-top:20px; opacity:0.3; pointer-events:none; transition: 0.3s;">DEVRİYEYİ BAŞLAT</button>
-        <button onclick="document.getElementById('equipmentModal').style.display='none'" style="margin-top:15px; background:none; border:none; color:#666; font-size:12px; cursor:pointer;">İPTAL</button>
-    </div>
-</div>
-<div id="hourSelectModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; justify-content:center; align-items:center; flex-direction:column;">
-    <div style="background:#111; padding:20px; border-radius:15px; border: 1px solid #00ffcc; width:90%; max-width:400px; text-align:center; box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);">
-        <h3 style="color:#00ffcc; margin-top:0; font-weight:900; letter-spacing:1px;">DEVRİYE SAATİNİ SEÇİN</h3>
-        <p style="color:#aaa; font-size:12px; margin-bottom:15px;"> Paket hazırlandığında ve bu cihazda tamamlanan saatler gösterilmez.</p>
-        <div id="hourListArea" style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px; max-height: 60vh; overflow-y: auto;">
-            </div>
-        <button onclick="document.getElementById('hourSelectModal').style.display='none'" style="margin-top:20px; background:transparent; color:#ff3b30; border:1px solid #ff3b30; padding:10px 20px; border-radius:10px; font-weight:bold; width:100%; cursor:pointer;">İPTAL ET</button>
-    </div>
-</div>
-
-<div id="confirmPatrolModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.92); z-index:10000; justify-content:center; align-items:center; flex-direction:column;">
-    <div style="background:#111; padding:25px; border-radius:15px; border: 1px solid #00ffcc; width:85%; max-width:320px; text-align:center; box-shadow: 0 0 25px rgba(0, 255, 204, 0.25);">
-        <h3 style="color:#00ffcc; margin-top:0; font-weight:900; letter-spacing:1px; font-size:18px;">ONAY GEREKİYOR</h3>
-        <p id="confirmPatrolText" style="color:#fff; font-size:15px; margin:20px 0; font-weight:bold; line-height:1.4;"></p>
-        <div style="display:flex; justify-content:space-between; gap:10px; margin-top:10px;">
-            <button id="btnConfirmCancel" style="background:transparent; color:#ff3b30; border:1px solid #ff3b30; padding:12px; border-radius:8px; font-weight:bold; width:48%; cursor:pointer;">İPTAL</button>
-            <button id="btnConfirmOk" style="background:#00ffcc; color:#000; border:none; padding:12px; border-radius:8px; font-weight:900; width:48%; cursor:pointer; box-shadow: 0 0 10px rgba(0, 255, 204, 0.4);">ONAYLA</button>
-        </div>
-    </div>
-</div>
-<div id="offlineLogin" role="dialog" aria-modal="true" aria-labelledby="offlineLoginTitle">
-  <div class="ol-card">
-    <small style="letter-spacing:2px;color:#96b0ce">KOD · OFFLİNE DEVRİYE</small>
-    <h2 id="offlineLoginTitle" style="font-size:25px;margin:18px 0 10px">Hesabınıza giriş yapın</h2>
-    <p> Bu ekran internet olmadan çalışır.</p>
-    <form id="offlineLoginForm">
-      <label for="offlineUsername">Kullanıcı adı</label>
-      <input id="offlineUsername" name="username" autocomplete="username" required>
-      <div id="offlineManagerGate" hidden>
-        <p id="offlineManagerHelp">KOD Denetim Sorumlusundan 4 haneli OFFLİNE şifrenizi Alın. .</p>
-        <label for="offlineManagerPassword">4 haneli şifresi</label>
-        <input id="offlineManagerPassword" name="managerPassword" type="password" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" autocomplete="off" aria-describedby="offlineManagerHelp" disabled>
-      </div>
-      <p id="offlineManagerHint"></p>
-      <label for="offlinePassword">Profil şifreniz — her girişte gereklidir</label>
-      <input id="offlinePassword" name="password" type="password" autocomplete="off" required>
-      <p id="offlineLoginMessage" role="status" aria-live="polite">Telefon paketi kontrol ediliyor…</p>
-      <button type="submit" id="offlineLoginBtn">ÇEVRİMDIŞI GİRİŞ YAP</button>
-    </form>
-    <button type="button" id="offlineLoginOnline" class="ol-link">ÇEVRİMİÇİ giriş ekranını aç</button>
-  </div>
-</div>
-
+<div id="appModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="appModalTitle"><div class="custom-alert-box"><span id="appModalIcon" class="material-symbols-outlined" aria-hidden="true">info</span><h3 id="appModalTitle">Bilgi</h3><p id="appModalText"></p><button type="button" class="custom-alert-btn" onclick="closeAppModal()">Tamam</button></div></div>
+<div id="confirmModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="missingTitle"><div class="critical-box"><div class="dialog-emblem" aria-hidden="true">!</div><h2 id="missingTitle">Eksik kontrol noktası</h2><p class="dialog-copy">Bazı kontrol noktaları henüz doğrulanmadı. Devriyeyi bitirmek için eksik noktaların nedenini yazın.</p><label class="field-label" for="incidentNote">Eksik nokta açıklaması</label><textarea id="incidentNote" placeholder="Örn. C blok girişi kilitli olduğu için girilemedi…"></textarea><span id="charWarning" class="char-count">En az 15 karakter açıklama yazın.</span><button type="button" id="forceFinishBtn" class="primary-button" disabled><span id="finishText">Devriyeyi bitir ve kaydet</span></button><button type="button" class="secondary-button" onclick="document.getElementById('confirmModal').style.display='none'">Devriyeye devam et</button></div></div>
+<div id="securityOverlay" role="status" aria-live="polite"><div class="location-pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 1v4m0 14v4M1 12h4m14 0h4"/></svg></div><h2>Nokta doğrulanıyor</h2><div id="countdownNumber">10</div><p>Konum bilgisi kaydediliyor.<br>İşlem tamamlanana kadar bekleyin.</p><p class="stay-note">Doğrulama bitene kadar kontrol noktasında kalın.</p></div>
+<div id="blockSelectModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="blockTitle"><div class="dialog-card"><p class="eyebrow">DEVRİYE ROTASI</p><h2 id="blockTitle">Bölgeni seç</h2><p class="dialog-copy">Devriye yapacağın bölgeyi seçerek devam et.</p><div id="blockListArea"></div><button type="button" class="text-button" onclick="document.getElementById('blockSelectModal').style.display='none'">Vazgeç</button></div></div>
+<div id="qrScannerModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="scannerTitle"><div class="dialog-card"><h2 id="scannerTitle">QR kodu okut</h2><div id="reader"></div><p class="capture-notice">Nokta doğrulamasında fotoğraf ve konum kaydı alınır.</p><div class="scanner-actions"><button type="button" id="flashBtn" aria-label="Feneri aç veya kapat"><span class="material-symbols-outlined" aria-hidden="true">flashlight_on</span></button><button type="button" class="secondary-button" onclick="closeScanner()">Vazgeç</button></div></div></div>
+<div id="equipmentModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="equipmentTitle"><div class="dialog-card"><p class="eyebrow">BAŞLAMADAN ÖNCE</p><h2 id="equipmentTitle">Son kontroller</h2><p class="dialog-copy">Devriyeye hazır olduğundan emin ol.</p><div class="equipment-list">
+  <div class="equipment-item"><p>Konum servisi açık mı?</p><div class="equipment-options"><button type="button" onclick="checkEq('gps',true)" id="gpsEvet">Evet</button><button type="button" onclick="checkEq('gps',false)" id="gpsHayir">Hayır</button></div></div>
+  <div class="equipment-item"><p>El fenerini aldın mı?</p><div class="equipment-options"><button type="button" onclick="checkEq('fener',true)" id="fenerEvet">Evet</button><button type="button" onclick="checkEq('fener',false)" id="fenerHayir">Hayır</button></div></div>
+  <div class="equipment-item"><p>Reflektör yeleğini giydin mi?</p><div class="equipment-options"><button type="button" onclick="checkEq('yelek',true)" id="yelekEvet">Evet</button><button type="button" onclick="checkEq('yelek',false)" id="yelekHayir">Hayır</button></div></div>
+</div><button type="button" id="finalStartBtn" class="primary-button">Devriyeyi başlat</button><button type="button" class="text-button" onclick="document.getElementById('equipmentModal').style.display='none'">Vazgeç</button></div></div>
+<div id="hourSelectModal" role="dialog" aria-modal="true" aria-labelledby="hourTitle"><div class="dialog-card"><p class="eyebrow">PLANLI DEVRİYE</p><h2 id="hourTitle">Saatini seç</h2><p class="dialog-copy">İstediğin devriye saatini seçerek başla.</p><p id="hourDateLabel"></p><div id="hourListArea"></div><button type="button" class="secondary-button" onclick="document.getElementById('hourSelectModal').style.display='none'">Vazgeç</button></div></div>
+<div id="confirmPatrolModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><div class="dialog-card"><p class="eyebrow">DEVRİYE BAŞLANGICI</p><h2 id="confirmTitle">Hazır mısın?</h2><p id="confirmPatrolText"></p><div class="dual-actions"><button type="button" id="btnConfirmCancel" class="secondary-button">Vazgeç</button><button type="button" id="btnConfirmOk" class="primary-button">Devam et</button></div></div></div>
+<div id="uploadAccessModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="uploadAccessTitle"><div class="dialog-card"><div class="dialog-emblem" aria-hidden="true">↑</div><h2 id="uploadAccessTitle">Merkeze gönderim</h2><p class="dialog-copy">Çevrimiçi oturumun yenilenmesi gerekiyor. Devriye hesabının profil şifresini gir.</p><form id="uploadAccessForm"><label for="uploadAccessPassword" class="field-label">Profil şifren</label><input type="password" id="uploadAccessPassword" autocomplete="current-password" required><p id="uploadAccessMessage" class="access-status" role="status" aria-live="polite"></p><button type="submit" id="uploadAccessSubmit" class="primary-button">Doğrula ve gönder</button></form><button type="button" id="uploadAccessCancel" class="text-button">Vazgeç</button></div></div>
+<div id="offlineLogin" role="dialog" aria-modal="true" aria-labelledby="offlineLoginTitle"><div class="ol-shell">
+  <div class="login-brand"><svg class="brand-mark" viewBox="0 0 32 38" fill="none" aria-hidden="true"><path d="M16 2 29 7v11c0 8-6 14-13 18C9 32 3 26 3 18V7L16 2Z" stroke="currentColor" stroke-width="1.5"/><path d="m11 14 5 5 7-8M16 19v8" stroke="currentColor" stroke-width="1.5"/></svg><div><div class="wordmark">KOLART</div><div class="brand-caption">GÜVENLİK & DENETİM</div></div></div>
+  <div class="ol-card"><p class="login-kicker">OFFLINE DEVRİYE</p><h2 id="offlineLoginTitle">Görevine hazır ol.</h2><p class="login-intro">Hesabına giriş yap, devriyene devam et.<br>İnternet olmadan da çalışır.</p>
+  <form id="offlineLoginForm">
+    <label class="field-label" for="offlineUsername">Kullanıcı adı</label><div class="input-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="7" r="3.5"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/></svg><input id="offlineUsername" name="username" autocomplete="username" placeholder="Kullanıcı adın" required></div>
+    <div id="offlineManagerGate" hidden><p id="offlineManagerHelp">Yöneticinden aldığın 4 haneli kodu gir. Bu onay mevcut paket sürümü için bir kez istenir.</p><label class="field-label" for="offlineManagerPassword">Yönetici kodu</label><div class="input-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><input id="offlineManagerPassword" name="managerPassword" type="password" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" autocomplete="off" aria-describedby="offlineManagerHelp" placeholder="••••" disabled></div></div>
+    <p id="offlineManagerHint"></p><label class="field-label" for="offlinePassword">Profil şifren</label><div class="input-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><input id="offlinePassword" name="password" type="password" autocomplete="current-password" placeholder="Profil şifreni gir" required><button type="button" id="offlinePasswordToggle" class="password-toggle" aria-label="Şifreyi göster" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+    <label class="remember-row"><input type="checkbox" id="offlineRemember"><span><strong>Beni hatırla</strong><small>Bu cihazda sonraki girişte şifre sorma.<br>Yeni paket sürümünde yeniden doğrula.</small></span></label>
+    <p id="offlineLoginMessage" role="status" aria-live="polite">Telefon paketi kontrol ediliyor…</p><button type="submit" id="offlineLoginBtn" class="primary-button"><span>Devriyeye giriş yap</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></button>
+  </form><button type="button" id="offlineLoginOnline">Ana giriş ekranını aç <span aria-hidden="true">↗</span></button></div>
+  <p class="login-bottom">KOLART GÜVENLİK · SAHADA YANINDA</p>
+</div></div>
 </body>
 </html>
