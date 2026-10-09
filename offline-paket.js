@@ -7,6 +7,7 @@
   // BUILD uyumluluğu korunur; yönetici parolası eklenen dosyaların önbelleği yenilenir.
   const REVISION = '20261009-0030';
   const PREVIOUS_REVISION = '20261008-2311';
+  const UI_REVISION = '20261009-elit-1';
 
   const base = new URL('./', document.currentScript.src);
   const POINTER = 'kolart_offline_son_kullanici';
@@ -671,6 +672,16 @@
     return candidate;
   }
 
+  function connectionFor(c,authUser) {
+    // Yalnız herkese açık web uygulaması seçenekleri; parola/token kaydedilmez.
+    const app=c.app || c.auth.app, options={};
+    for(const key of ['apiKey','authDomain','databaseURL','projectId','storageBucket','messagingSenderId','appId','measurementId'])
+      if(typeof app?.options?.[key]==='string')options[key]=app.options[key];
+    const scripts=[...document.scripts].map(s=>s.src+' '+s.textContent).join('\n');
+    const sdkVersion=scripts.match(/gstatic\.com\/firebasejs\/(\d+\.\d+\.\d+)\//)?.[1] || '10.12.2';
+    return {options,appName:app?.name || '[DEFAULT]',email:authUser.email || null,sdkVersion};
+  }
+
   async function prepare(c, progress = () => {}) {
     if (!navigator.onLine) {
       throw new Error(
@@ -731,6 +742,18 @@
     // Eski paket sadece çevrimiçi yükseltmede okunur; offline giriş onaysız açılmaz.
     const candidate = await load(c.siteID, username, { allowPreviousRevision: true });
     const local = candidate?.uid === authUser.uid ? candidate : null;
+    const connection=connectionFor(c,authUser);
+    if(local) {
+      local.connection=connection;
+      // Aynı veri sürümünü koruyarak güncel ekran dosyalarını bir kez yenile.
+      if(local.revision===REVISION && hasManagerPassword(local) && local.uiRevision!==UI_REVISION) {
+        progress(5,'Devriye ekranları güncelleniyor…');
+        const assets=await shell(progress);
+        local.assetCache=assets.cacheName;local.requiredAssets=assets.files;local.uiRevision=UI_REVISION;
+      }
+      sameSession(c,authUser.uid);
+      await window.KolartOfflineSync.putPackage(local);
+    }
     const flag = readFlag(c.siteID, username);
 
     const hasLocalFlag = !!(
@@ -760,6 +783,8 @@
       const upgraded = {
         ...copy(local),
         revision: REVISION,
+        uiRevision: UI_REVISION,
+        connection,
         managerVerifier,
         managerApproval: null,
         assetCache: assets.cacheName,
@@ -1049,6 +1074,8 @@
       schema: 4,
       build: BUILD,
       revision: REVISION,
+      uiRevision: UI_REVISION,
+      connection,
       complete: true,
       version: targetVersion,
       versionBase: remoteVersion,
