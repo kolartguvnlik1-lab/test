@@ -563,6 +563,11 @@ body.index-transfer-open #kolartSyncModal { display: none !important; }
 .it-warning { display: flex; align-items: flex-start; gap: 10px; color: #e6dcb5; background: #c9ac5d0c; border: 1px solid #d1b96425; padding: 14px; border-radius: 14px; }
 .it-warning svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px; }
 .it-warning p { margin: 0; font-size: 11px; line-height: 1.8; }
+.it-auth { margin-top: 18px; }
+.it-auth label { display: block; color: #d3dfdc; font-size: 12px; font-weight: 700; }
+.it-auth p { color: #a6bfbc; font-size: 11px; line-height: 1.7; margin: 8px 0 10px; }
+.it-auth input { display: block; width: 100%; max-width: none; margin: 0; padding: 14px; border: 1px solid #ffffff25; border-radius: 12px; background: #ffffff08; color: #edf5f2; font: 16px 'Montserrat', Arial, sans-serif; text-align: left; }
+.it-auth input:focus-visible { outline: 2px solid #d6dcb8; outline-offset: 3px; }
 .it-progress { margin-top: 20px; }.it-progress-row { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; color: #adbfbc; margin-bottom: 10px; }
 .it-progress-row strong { color: #edf5f2; font-variant-numeric: tabular-nums; }
 .it-track { overflow: hidden; height: 9px; border-radius: 12px; background: #ffffff0c; }
@@ -697,8 +702,9 @@ body.index-transfer-open #kolartSyncModal { display: none !important; }
     <div class="it-summary"><strong id="it-count" class="it-count">0</strong><div><div id="it-summary-label" class="it-summary-label">bekleyen devriye kaydı</div><div id="it-account" class="it-account"></div></div></div>
     <div id="it-dates" class="it-dates" aria-label="Devriye tarihleri"></div>
     <div id="it-warning-box" class="it-warning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3 2.7 19h18.6L12 3Z" stroke-linejoin="round"/><path d="M12 9v4m0 3v.2" stroke-linecap="round"/></svg><p id="it-warning"></p></div>
+    <div id="it-auth-box" class="it-auth" hidden><label for="it-auth-password">Devriye hesabınızın şifresi</label><p id="it-auth-message">Gönderim için kayıtların ait olduğu hesabı doğrulayın.</p><input id="it-auth-password" type="password" autocomplete="current-password" placeholder="Hesap şifreniz" aria-describedby="it-auth-message"></div>
     <div id="it-progress" class="it-progress" hidden><div class="it-progress-row"><span id="it-progress-label">Şirkete aktarılıyor</span><strong id="it-percent">%0</strong></div><div id="it-track" class="it-track" role="progressbar" aria-label="Devriye gönderimi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="it-bar" class="it-bar"></div></div><p id="it-step" class="it-step" role="status" aria-live="polite"></p></div>
-    <div class="it-actions"><button id="it-send" type="button" class="it-primary">Yükle ve devam et</button><button id="it-later" type="button" class="it-secondary">Daha sonra</button></div>
+    <div class="it-actions"><button id="it-send" type="button" class="it-primary">Yükle ve devam et</button><button id="it-back" type="button" class="it-secondary" hidden>Giriş ekranına dön</button></div>
     <p id="it-foot" class="it-foot"></p>
   </div>
 </div>
@@ -727,6 +733,31 @@ body.index-transfer-open #kolartSyncModal { display: none !important; }
     if (navigator.onLine) return;
     event.preventDefault(); event.stopImmediatePropagation();
   }, true);
+  // İnternet yokken bağlantı, Firebase hazır olmasa da doğrudan offline sayfayı açar.
+  // İnternet varken ilk tıklama modül yüklenene kadar saklanır; kayıt kontrolü atlanmaz.
+  const offlineButton = document.getElementById('offlineModeBtn');
+  let offlineRequested = false;
+  function openRequestedOffline() {
+    if (!offlineRequested) return;
+    if (!navigator.onLine) {
+      offlineRequested = false;
+      location.href = offlineButton.href;
+    } else if (typeof window.KolartIndexOpenOffline === 'function') {
+      offlineRequested = false;
+      void window.KolartIndexOpenOffline();
+    }
+  }
+  offlineButton.addEventListener('click', event => {
+    if (!navigator.onLine) return;
+    event.preventDefault();
+    if (document.getElementById('secLoginBtn').disabled) return;
+    offlineRequested = true;
+    document.getElementById('message').textContent = 'Telefonunuzdaki devriye kayıtları kontrol ediliyor…';
+    openRequestedOffline();
+  });
+  window.addEventListener('kolart-index-ready', openRequestedOffline);
+  window.addEventListener('offline', openRequestedOffline);
+
   if ('serviceWorker' in navigator && window.isSecureContext) {
     // Eski sw.js bu ziyarette eski paket scriptini sunmuşsa yeni servisle bir kez yenile.
     navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -765,7 +796,7 @@ const IndexPatrolUpload = (() => {
     const dialog = document.getElementById('indexTransferModal');
     const ui = Object.fromEntries(['card', 'symbol', 'title', 'copy', 'count', 'summary-label', 'account',
         'dates', 'warning-box', 'warning', 'progress', 'progress-label', 'percent', 'track', 'bar',
-        'step', 'send', 'later', 'foot'].map(id => [id, document.getElementById('it-' + id)]));
+        'step', 'send', 'back', 'foot', 'auth-box', 'auth-password', 'auth-message'].map(id => [id, document.getElementById('it-' + id)]));
     const arrow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     const tick = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 12 4.5 4.5L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     let pending, resolver, context, uid, records = [], busy = false, state = 'review';
@@ -806,7 +837,15 @@ const IndexPatrolUpload = (() => {
         ui.track.setAttribute('aria-valuenow', String(value));
         ui.step.textContent = step || 'Şirketten kayıt onayı bekleniyor…';
     }
-    function focusPrimary() { if (!dialog.hidden) (ui.send.hidden ? ui.card : ui.send).focus({ preventScroll: true }); }
+    function needsAuthentication() { return !!context.authorize && context.auth.currentUser?.uid !== uid; }
+    function renderAuthentication() {
+        ui['auth-box'].hidden = !needsAuthentication();
+        ui['auth-password'].disabled = busy;
+        ui['auth-message'].textContent = `${records[0]?.meta.username || 'Devriye hesabı'} hesabının şifresini girin. Yalnız bu hesaba ait kayıtlar gönderilecektir.`;
+    }
+    function focusPrimary() {
+        if (!dialog.hidden) (needsAuthentication() && !busy ? ui['auth-password'] : ui.send.hidden ? ui.card : ui.send).focus({ preventScroll: true });
+    }
     function open() {
         previousFocus = document.activeElement;
         inertElements = [...document.body.children].filter(el => el !== dialog && !['SCRIPT', 'STYLE'].includes(el.tagName))
@@ -823,6 +862,7 @@ const IndexPatrolUpload = (() => {
         inertElements = [];
         if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
         const done = resolver; resolver = null; pending = null;
+        ui['auth-password'].value = '';
         if (done) done(result);
     }
     async function keepScreenAwake() {
@@ -837,7 +877,8 @@ const IndexPatrolUpload = (() => {
     }
     function setBusy(value) {
         busy = value;
-        if (value) { ui.send.hidden = true; ui.later.hidden = true; void keepScreenAwake(); }
+        ui['auth-password'].disabled = value;
+        if (value) { ui.send.hidden = true; ui.back.hidden = true; void keepScreenAwake(); }
         else if (wakeLock) { const lock = wakeLock; wakeLock = null; void lock.release().catch(() => {}); }
     }
     function failure(message) {
@@ -849,11 +890,14 @@ const IndexPatrolUpload = (() => {
         ui['progress-label'].textContent = 'Gönderim tamamlanamadı';
         ui.step.textContent = `${records.length} devriye kaydı gönderilmeyi bekliyor.`;
         ui.send.textContent = 'Kalan kayıtları tekrar yükle'; ui.send.hidden = false;
-        ui.later.textContent = 'Giriş ekranına dön'; ui.later.hidden = false;
+        ui.back.hidden = false; renderAuthentication();
         ui.foot.textContent = 'Başarıyla iletilen kayıtlar tekrar bekleme listesine alınmaz.';
     }
     function friendlyError(error) {
         const message = String(error?.code || '') + ' ' + String(error?.message || error || '');
+        if (/wrong-password|invalid-credential|invalid-login-credentials/i.test(message)) return 'Şifre doğrulanamadı. Devriye kayıtlarının ait olduğu hesabın şifresini kontrol edin.';
+        if (/ACCOUNT_INACTIVE/i.test(message)) return 'Devriye hesabınız askıya alınmış. Kayıtlarınız telefonda korunuyor; şirketinizle iletişime geçin.';
+        if (/ACCOUNT_MISMATCH/i.test(message)) return 'Hesap ile devriye kayıtları eşleşmiyor. Kayıtların ait olduğu hesabı kullanın.';
         if (/permission|unauthorized|erişim izni/i.test(message)) return 'Şirkete gönderim yetkisi doğrulanamadı. Aynı devriye hesabıyla tekrar giriş yapın.';
         if (/AUTH_REQUIRED|oturum|hesap|giriş gerekli/i.test(message)) return 'Devriye hesabınızın oturumu değişti. Aynı hesapla tekrar giriş yaparak kalan kayıtları gönderin.';
         if (/diğer açık sekme/i.test(message)) return 'Kayıtlarınız diğer açık sekmede yükleniyor. O sekmedeki işlemin tamamlanmasını bekleyin.';
@@ -862,7 +906,10 @@ const IndexPatrolUpload = (() => {
     }
     async function upload() {
         if (busy) return;
-        if (context.auth.currentUser?.uid !== uid) { failure(friendlyError({ code: 'AUTH_REQUIRED' })); focusPrimary(); return; }
+        if (needsAuthentication() && !ui['auth-password'].value.trim()) {
+            renderAuthentication(); ui['auth-password'].focus(); return;
+        }
+        if (!context.authorize && context.auth.currentUser?.uid !== uid) { failure(friendlyError({ code: 'AUTH_REQUIRED' })); focusPrimary(); return; }
         if (!navigator.onLine) { failure('İnternet bağlantısı yok. Bağlantı geldiğinde kalan kayıtları yükleyebilirsiniz.'); focusPrimary(); return; }
         marker('write'); transition('sending'); setBusy(true);
         ui.title.textContent = 'Devriyeleriniz şirkete iletiliyor';
@@ -873,6 +920,11 @@ const IndexPatrolUpload = (() => {
         ui.foot.textContent = 'Onaylanmayan kayıtlar telefonunuzda korunur.';
         progress(0, 'Güvenli gönderim bağlantısı hazırlanıyor…'); ui.card.focus({ preventScroll: true });
         try {
+            if (context.authorize) {
+                progress(0, 'Devriye hesabınız doğrulanıyor…');
+                await context.authorize(ui['auth-password'].value.trim());
+                ui['auth-password'].value = ''; renderAuthentication();
+            }
             let timer;
             const storage = await Promise.race([loadUploadStorage(), new Promise((_, reject) => {
                 timer = setTimeout(() => reject(new Error('Gönderim bağlantısı zaman aşımı')), 20000);
@@ -883,12 +935,12 @@ const IndexPatrolUpload = (() => {
             if (completed && !remaining.length) {
                 marker('clear'); transition('success'); ui.symbol.innerHTML = tick;
                 ui.title.textContent = 'Şirkete iletildi';
-                ui.copy.textContent = 'Devriye kayıtlarınızın tamamı ve varsa fotoğrafları sisteme kaydedildi. Artık bu ekranı güvenle kapatabilir veya devam edebilirsiniz.';
+                ui.copy.textContent = 'Devriye kayıtlarınızın tamamı ve varsa fotoğrafları sisteme kaydedildi. Otomatik olarak devam ediliyor…';
                 ui['summary-label'].textContent = 'devriye kaydı başarıyla iletildi';
                 ui['warning-box'].hidden = true; ui['progress-label'].textContent = 'Aktarım tamamlandı';
                 progress(100, 'Tüm kayıtlar için şirket onayı alındı.');
-                ui.send.textContent = 'Devam et'; ui.send.hidden = false; ui.later.hidden = true;
-                ui.foot.textContent = 'Bekleyen kayıt kalmadı. Devriyeye devam edebilirsiniz.';
+                ui.send.hidden = true; ui.back.hidden = true;
+                ui.foot.textContent = 'Bekleyen kayıt kalmadı. Yönlendiriliyorsunuz…';
             } else {
                 renderRecords(remaining);
                 failure(friendlyError(document.getElementById('ks-text')?.textContent || 'Gönderim tamamlanamadı'));
@@ -899,10 +951,17 @@ const IndexPatrolUpload = (() => {
             console.warn('[Index devriye aktarımı]', error.code || error.message);
         } finally {
             setBusy(false); window.KolartOfflineSync?.hideModal(); focusPrimary();
+            if (state === 'success') setTimeout(() => {
+                if (context.auth.currentUser?.uid === uid) close(true);
+                else { failure(friendlyError({ code: 'AUTH_REQUIRED' })); focusPrimary(); }
+            }, 320);
         }
     }
-    ui.send.onclick = () => { if (state === 'success') close(true); else void upload(); };
-    ui.later.onclick = () => { if (!busy) close(state === 'review'); };
+    ui.send.onclick = () => { if (state !== 'success') void upload(); };
+    ui.back.onclick = () => { if (!busy && state === 'error') close(false); };
+    ui['auth-password'].addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); void upload(); }
+    });
     window.addEventListener('kolart-sync-progress', event => {
         if (busy) progress(Math.min(99, Number(event.detail?.percent) || 0), event.detail?.step);
     });
@@ -921,7 +980,7 @@ const IndexPatrolUpload = (() => {
     dialog.addEventListener('keydown', event => {
         if (event.key === 'Escape') { event.preventDefault(); return; }
         if (event.key !== 'Tab') return;
-        const buttons = [ui.send, ui.later].filter(el => !el.hidden && !el.disabled);
+        const buttons = [ui['auth-password'], ui.send, ui.back].filter(el => !el.hidden && !el.disabled && el.getClientRects().length);
         if (!buttons.length) { event.preventDefault(); ui.card.focus(); return; }
         const first = buttons[0], last = buttons.at(-1);
         if (event.shiftKey && (document.activeElement === first || document.activeElement === ui.card)) { event.preventDefault(); last.focus(); }
@@ -930,10 +989,10 @@ const IndexPatrolUpload = (() => {
     return {
         async check(c) {
             if (pending) return pending;
-            if (!c.auth.currentUser) return false;
-            context = c; uid = c.auth.currentUser.uid;
+            context = c; uid = c.expectedUID || c.auth.currentUser?.uid;
+            if (!uid) return false;
             const rows = await window.KolartOfflineSync.queueSummary(c.siteID, uid);
-            if (c.auth.currentUser?.uid !== uid) return false;
+            if (!c.authorize && c.auth.currentUser?.uid !== uid) return false;
             if (!rows.length) { marker('clear'); return true; }
             pending = new Promise(resolve => { resolver = resolve; });
             transition('review'); renderRecords(rows); ui.symbol.innerHTML = arrow;
@@ -944,8 +1003,8 @@ const IndexPatrolUpload = (() => {
             ui.warning.textContent = 'Gönderim bitene kadar bu ekranı açık tutun. Uygulamayı kapatır veya ekranı kilitlerseniz aktarım yarım kalabilir.';
             ui['warning-box'].hidden = false; ui.progress.hidden = true;
             ui.send.textContent = 'Yükle ve devam et'; ui.send.hidden = false;
-            ui.later.textContent = 'Daha sonra'; ui.later.hidden = false;
-            ui.foot.textContent = 'Daha sonra seçerseniz kayıtlar gönderilene kadar şirket ekranında görünmez.';
+            ui.back.hidden = true; ui['auth-password'].value = ''; renderAuthentication();
+            ui.foot.textContent = 'Tüm kayıtlar onaylandığında otomatik olarak devam edilir.';
             progress(0, 'Gönderim onayınız bekleniyor.'); open();
             return pending;
         }
@@ -1179,6 +1238,86 @@ async function initializeSavedSite() {
   }
 }
 void initializeSavedSite().catch(error => console.warn("Giriş hazırlığı:", error.message));
+
+// Offline Mod'un çevrimiçi girişinde de aynı kayıt onayı kullanılır.
+let openingOffline = false;
+async function openOfflineWithUpload() {
+    const button = document.getElementById('offlineModeBtn');
+    const loginButton = document.getElementById('secLoginBtn');
+    if (openingOffline || loginButton.disabled) return;
+    if (!navigator.onLine) { location.href = button.href; return; }
+    openingOffline = true;
+    loginButton.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    const notice = document.getElementById('message');
+    try {
+        const siteID = localStorage.getItem('siteID');
+        const rows = siteID ? await window.KolartOfflineSync.queueSummary(siteID) : [];
+        if (!rows.length) { location.href = button.href; return; }
+
+        const options = decryptData(localStorage.getItem('siteConfig') || '');
+        if (!options) {
+            notice.textContent = 'Bekleyen kayıtlarınız var. Göndermek için devriye projenizi tanımlayın.';
+            noProjectModal.style.display = 'flex';
+            return;
+        }
+        const app = getApps().find(a => a.name === `siteApp-${siteID}`) || initializeApp(options, `siteApp-${siteID}`);
+        const auth = getAuth(app), db = getDatabase(app);
+        if (typeof auth.authStateReady === 'function') await indexRequestTimeout(auth.authStateReady());
+        else await indexRequestTimeout(new Promise(resolve => {
+            let stop;
+            stop = onAuthStateChanged(auth, () => { queueMicrotask(() => stop?.()); resolve(); });
+        }));
+
+        let pointer, remembered;
+        try { pointer = JSON.parse(localStorage.getItem('kolart_offline_son_kullanici') || 'null'); } catch (_) {}
+        try { remembered = JSON.parse(localStorage.getItem('securityUser') || 'null'); } catch (_) {}
+        const normalized = value => String(value || '').trim().toLocaleUpperCase('tr-TR');
+        const owners = [...new Set(rows.map(row => row.meta.uid))];
+        const expectedUID = (pointer?.siteID === siteID && owners.includes(pointer.uid) ? pointer.uid : null)
+            || (owners.includes(auth.currentUser?.uid) ? auth.currentUser.uid : null)
+            || rows.find(row => remembered?.username && normalized(row.meta.username) === normalized(remembered.username))?.meta.uid
+            || (owners.length === 1 ? owners[0] : null);
+        if (!expectedUID) {
+            notice.textContent = 'Birden fazla hesaba ait devriye kaydı var. Kayıtları göndermek için kendi hesabınızla Giriş Yap butonunu kullanın.';
+            return;
+        }
+        const owner = rows.find(row => row.meta.uid === expectedUID).meta;
+        const c = { ...offlineUploadContext(app, db, auth, siteID), expectedUID };
+        c.authorize = async password => {
+            if (auth.currentUser?.uid !== expectedUID) {
+                if (!password) throw Object.assign(new Error('Giriş gerekli'), { code: 'AUTH_REQUIRED' });
+                const packages = await window.KolartOfflineSync.packages(siteID);
+                const pack = packages.find(item => item.uid === expectedUID);
+                const email = pack?.connection?.email || formatToEmail(owner.username);
+                const credential = await indexRequestTimeout(signInWithEmailAndPassword(auth, email, password));
+                if (credential.user.uid !== expectedUID) throw Object.assign(new Error('Hesap eşleşmiyor'), { code: 'ACCOUNT_MISMATCH' });
+            }
+            const snapshot = await indexRequestTimeout(get(ref(db, 'users/' + owner.username)));
+            if (!snapshot.exists() || (snapshot.val().uid && snapshot.val().uid !== expectedUID)) {
+                throw Object.assign(new Error('Hesap eşleşmiyor'), { code: 'ACCOUNT_MISMATCH' });
+            }
+            if (snapshot.val().isActive === false) throw Object.assign(new Error('Hesap askıya alınmış'), { code: 'ACCOUNT_INACTIVE' });
+            if (auth.currentUser?.uid !== expectedUID) throw Object.assign(new Error('Oturum değişti'), { code: 'AUTH_REQUIRED' });
+        };
+        notice.textContent = '';
+        if (await IndexPatrolUpload.check(c)) location.href = button.href;
+    } catch (error) {
+        notice.textContent = 'Kayıtlar kontrol edilemedi. İnternetinizi kontrol edin ve tekrar deneyin. Telefonunuzdaki kayıtlar korunur.';
+        console.warn('[Offline Mod kayıt kontrolü]', error.code || error.message);
+    } finally {
+        openingOffline = false; loginButton.disabled = false;
+        button.removeAttribute('aria-busy');
+    }
+}
+function indexRequestTimeout(request, ms = 25000) {
+    let timer;
+    return Promise.race([request, new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Bağlantı zaman aşımı')), ms);
+    })]).finally(() => clearTimeout(timer));
+}
+window.KolartIndexOpenOffline = openOfflineWithUpload;
+window.dispatchEvent(new Event('kolart-index-ready'));
 
 async function loginUser(rawUsername, password, role) {
     const cleanUsername = rawUsername.trim();
