@@ -2,8 +2,8 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<script src="./offline-sync.js?v=20261008-2050"></script>
-<script src="./offline-paket.js?v=20261009-0030"></script>
+<script defer src="./offline-sync.js?v=20261008-2050"></script>
+<script defer src="./offline-paket.js?v=20261009-0030"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
@@ -15,6 +15,9 @@
   document.documentElement.setAttribute('data-theme', savedTheme);
 </script>
 
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
@@ -524,6 +527,59 @@ input, textarea {
   user-select: none;
   transition: color 0.3s ease;
 }
+/* Girişte kullanıcı onayı; bu stiller yalnız index sayfasına aittir. */
+.index-transfer[hidden], .index-transfer [hidden] { display: none !important; }
+.index-transfer {
+  position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center;
+  padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
+  box-sizing: border-box; background: rgba(2, 8, 12, .88); backdrop-filter: blur(16px);
+  color: #edf5f2; font-family: 'Montserrat', Arial, sans-serif;
+}
+.index-transfer *, .index-transfer *::before, .index-transfer *::after { box-sizing: border-box; }
+body.index-transfer-open #kolartSyncModal { display: none !important; }
+.it-card {
+  width: min(100%, 460px); max-height: calc(100dvh - 40px); overflow: auto; overscroll-behavior: contain;
+  border: 1px solid rgba(216, 231, 207, .18); border-radius: 28px; padding: 28px;
+  background: radial-gradient(ellipse at 100% 0, #40563c55, transparent 55%), linear-gradient(150deg, #172a29, #0e1b20);
+  box-shadow: 0 32px 100px #0009; text-align: left;
+}
+.it-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+.it-brand { font-size: 10px; font-weight: 800; letter-spacing: 1.7px; color: #d6dcb8; }
+.it-private { display: flex; align-items: center; gap: 5px; color: #9facab; font-size: 10px; white-space: nowrap; }
+.it-symbol {
+  display: grid; place-items: center; width: 62px; height: 62px; border-radius: 20px;
+  background: #d6dcb812; border: 1px solid #d6dcb833; color: #e2e9bc; margin-bottom: 20px;
+}
+.it-symbol svg { width: 30px; height: 30px; }
+.it-card h2 { color: #f6faf8; font-size: 25px; line-height: 1.3; letter-spacing: -.8px; margin: 0 0 12px; }
+.it-copy { color: #b8c9c8; font-size: 13px; line-height: 1.75; margin: 0 0 20px; }
+.it-summary { display: flex; align-items: center; gap: 13px; padding: 16px; border-radius: 16px; background: #ffffff05; border: 1px solid #ffffff0a; margin-bottom: 12px; }
+.it-count { font-size: 34px; font-weight: 700; color: #e2e9bc; line-height: 1; font-variant-numeric: tabular-nums; }
+.it-summary-label { color: #d3dfdc; font-size: 12px; font-weight: 700; }
+.it-account { color: #95aba8; font-size: 11px; line-height: 1.6; margin-top: 5px; overflow-wrap: anywhere; }
+.it-dates { max-height: 146px; overflow: auto; scrollbar-width: thin; margin-bottom: 18px; }
+.it-date { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 3px; border-bottom: 1px solid #ffffff0c; font-size: 12px; }
+.it-date span { color: #bdcfcb; }.it-date strong { color: #e7ede3; white-space: nowrap; font-weight: 600; }
+.it-warning { display: flex; align-items: flex-start; gap: 10px; color: #e6dcb5; background: #c9ac5d0c; border: 1px solid #d1b96425; padding: 14px; border-radius: 14px; }
+.it-warning svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px; }
+.it-warning p { margin: 0; font-size: 11px; line-height: 1.8; }
+.it-progress { margin-top: 20px; }.it-progress-row { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; color: #adbfbc; margin-bottom: 10px; }
+.it-progress-row strong { color: #edf5f2; font-variant-numeric: tabular-nums; }
+.it-track { overflow: hidden; height: 9px; border-radius: 12px; background: #ffffff0c; }
+.it-bar { height: 100%; width: 0; border-radius: 12px; background: linear-gradient(90deg, #d6dcb8, #83d4ac); transition: width .2s ease; }
+.it-step { color: #a6bfbc; font-size: 11px; line-height: 1.7; margin: 10px 0 0; }
+.it-actions { display: flex; flex-direction: column; gap: 9px; margin-top: 22px; }
+.it-actions button { width: 100%; border: 0; border-radius: 14px; padding: 15px; font: 700 12px 'Montserrat', Arial, sans-serif; cursor: pointer; }
+.it-primary { color: #142522; background: linear-gradient(110deg, #e2e9bc, #a1d9b9); box-shadow: 0 7px 22px #9fcaad10; }
+.it-secondary { color: #b9ceca; background: #ffffff05; border: 1px solid #ffffff12 !important; }
+.it-actions button:focus-visible { outline: 2px solid #d6dcb8; outline-offset: 4px; }
+.it-actions button:disabled { opacity: .55; cursor: wait; }
+.it-foot { display: flex; align-items: center; justify-content: center; gap: 6px; color: #8ea6a1; font-size: 10px; line-height: 1.6; text-align: center; margin: 16px 0 0; }
+.it-card[data-state='success'] .it-symbol { color: #8edeb4; background: #7ed8a714; border-color: #7ed8a740; }
+.it-card[data-state='error'] .it-symbol { color: #edce8b; }
+@media (max-width: 420px) { .it-card { padding: 23px 20px; border-radius: 23px; }.it-card h2 { font-size: 22px; }.it-top { margin-bottom: 20px; } }
+@media (prefers-reduced-motion: reduce) { .it-bar { transition: none; } }
+
 </style>
 </head>
 <body>
@@ -632,6 +688,21 @@ input, textarea {
     </div>
 </div>
 
+<div id="indexTransferModal" class="index-transfer" hidden role="dialog" aria-modal="true" aria-labelledby="it-title" aria-describedby="it-copy it-warning">
+  <div id="it-card" class="it-card" data-state="review" tabindex="-1">
+    <div class="it-top"><span class="it-brand">KOLART · KAYIT AKTARIMI</span><span class="it-private">● Hesabınıza ait kayıtlar</span></div>
+    <div id="it-symbol" class="it-symbol" aria-hidden="true"></div>
+    <h2 id="it-title">Devriyeleriniz gönderilmeyi bekliyor</h2>
+    <p id="it-copy" class="it-copy"></p>
+    <div class="it-summary"><strong id="it-count" class="it-count">0</strong><div><div id="it-summary-label" class="it-summary-label">bekleyen devriye kaydı</div><div id="it-account" class="it-account"></div></div></div>
+    <div id="it-dates" class="it-dates" aria-label="Devriye tarihleri"></div>
+    <div id="it-warning-box" class="it-warning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3 2.7 19h18.6L12 3Z" stroke-linejoin="round"/><path d="M12 9v4m0 3v.2" stroke-linecap="round"/></svg><p id="it-warning"></p></div>
+    <div id="it-progress" class="it-progress" hidden><div class="it-progress-row"><span id="it-progress-label">Şirkete aktarılıyor</span><strong id="it-percent">%0</strong></div><div id="it-track" class="it-track" role="progressbar" aria-label="Devriye gönderimi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="it-bar" class="it-bar"></div></div><p id="it-step" class="it-step" role="status" aria-live="polite"></p></div>
+    <div class="it-actions"><button id="it-send" type="button" class="it-primary">Yükle ve devam et</button><button id="it-later" type="button" class="it-secondary">Daha sonra</button></div>
+    <p id="it-foot" class="it-foot"></p>
+  </div>
+</div>
+
 <div class="support-wrapper" id="supportWrapper">
     <a href="whatsapp://send?phone=905537074882&text=Merhaba, teknik desteğe ihtiyacım var." class="support-item">
         <span class="support-label">WhatsApp Mesaj</span>
@@ -659,7 +730,7 @@ input, textarea {
   if ('serviceWorker' in navigator && window.isSecureContext) {
     // Eski sw.js bu ziyarette eski paket scriptini sunmuşsa yeni servisle bir kez yenile.
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (window.KolartOffline?.REVISION !== '20261009-0030') location.reload();
+      if (window.KolartOffline && window.KolartOffline.REVISION !== '20261009-0030') location.reload();
     });
     navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
       .catch(error => console.warn('Service Worker hatası:', error.message));
@@ -667,30 +738,240 @@ input, textarea {
 })();
 </script>
 
-<script src="https://unpkg.com/html5-qrcode"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 
 <script type="module">
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 import { getDatabase, ref, get, child, update, onValue, set, runTransaction } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
 import { getAuth, signInWithEmailAndPassword, updatePassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { getStorage, ref as sRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
+// Fotoğraf aktarımına ait SDK, yalnız kullanıcı gönderim istediğinde yüklenir.
+let uploadStoragePromise;
+function loadUploadStorage() {
+    if (!uploadStoragePromise) {
+        uploadStoragePromise = import('https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js')
+            .then(m => ({ getStorage: m.getStorage, sRef: m.ref,
+                uploadBytesResumable: m.uploadBytesResumable, getDownloadURL: m.getDownloadURL }))
+            .catch(error => { uploadStoragePromise = null; throw error; });
+    }
+    return uploadStoragePromise;
+}
 function offlineUploadContext(app, db, auth, siteID) {
-    return {app,db,auth,siteID,ref,get,set,update,
-        getStorage,sRef,uploadBytesResumable,getDownloadURL,onAuthStateChanged};
+    return { app, db, auth, siteID, ref, get, set, update, onAuthStateChanged };
 }
+
+// Kuyruğun sahibi ve proje kimliği birlikte kontrol edilir. Gönderim yükleme isteğiyle başlar.
+const IndexPatrolUpload = (() => {
+    const dialog = document.getElementById('indexTransferModal');
+    const ui = Object.fromEntries(['card', 'symbol', 'title', 'copy', 'count', 'summary-label', 'account',
+        'dates', 'warning-box', 'warning', 'progress', 'progress-label', 'percent', 'track', 'bar',
+        'step', 'send', 'later', 'foot'].map(id => [id, document.getElementById('it-' + id)]));
+    const arrow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const tick = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 12 4.5 4.5L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    let pending, resolver, context, uid, records = [], busy = false, state = 'review';
+    let wakeLock, wakeRequest = false, previousFocus, inertElements = [];
+    const markerKey = () => 'kolart_index_aktarim|' + encodeURIComponent(context.siteID) + '|' + encodeURIComponent(uid);
+    function marker(action) {
+        try {
+            if (action === 'read') return !!localStorage.getItem(markerKey());
+            if (action === 'clear') localStorage.removeItem(markerKey());
+            if (action === 'write') localStorage.setItem(markerKey(), JSON.stringify({ startedAt: Date.now() }));
+        } catch (_) { /* Asıl kayıtlar IndexedDB kuyruğundadır; bu yalnız hatırlatma işaretidir. */ }
+        return false;
+    }
+    function transition(next) { state = next; ui.card.dataset.state = next; }
+    function renderRecords(rows) {
+        records = rows;
+        ui.count.textContent = String(rows.length);
+        ui['summary-label'].textContent = 'bekleyen devriye kaydı';
+        ui.account.textContent = rows[0]?.meta.username || context.auth.currentUser?.displayName || 'Güvenlik hesabınız';
+        const days = new Map();
+        for (const row of rows) {
+            const key = String(row.log.dateKey || row.meta.shiftDate || 'Tarihi belirtilmemiş');
+            days.set(key, (days.get(key) || 0) + 1);
+        }
+        ui.dates.replaceChildren();
+        for (const [day, count] of [...days].sort(([a], [b]) => a.localeCompare(b))) {
+            const line = document.createElement('div'); line.className = 'it-date';
+            const label = document.createElement('span'), amount = document.createElement('strong');
+            const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+            label.textContent = match ? `${match[3]}.${match[2]}.${match[1]}` : day;
+            amount.textContent = `${count} devriye`;
+            line.append(label, amount); ui.dates.appendChild(line);
+        }
+    }
+    function progress(percent, step) {
+        const value = Math.max(0, Math.min(100, Math.floor(Number(percent) || 0)));
+        ui.bar.style.width = value + '%'; ui.percent.textContent = '%' + value;
+        ui.track.setAttribute('aria-valuenow', String(value));
+        ui.step.textContent = step || 'Şirketten kayıt onayı bekleniyor…';
+    }
+    function focusPrimary() { if (!dialog.hidden) (ui.send.hidden ? ui.card : ui.send).focus({ preventScroll: true }); }
+    function open() {
+        previousFocus = document.activeElement;
+        inertElements = [...document.body.children].filter(el => el !== dialog && !['SCRIPT', 'STYLE'].includes(el.tagName))
+            .map(el => [el, el.inert]);
+        for (const [el] of inertElements) el.inert = true;
+        document.body.classList.add('index-transfer-open'); dialog.hidden = false;
+        focusPrimary();
+    }
+    function close(result) {
+        if (busy) return;
+        dialog.hidden = true; window.KolartOfflineSync?.hideModal();
+        document.body.classList.remove('index-transfer-open');
+        for (const [el, original] of inertElements) el.inert = original;
+        inertElements = [];
+        if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+        const done = resolver; resolver = null; pending = null;
+        if (done) done(result);
+    }
+    async function keepScreenAwake() {
+        if (!busy || document.visibilityState !== 'visible' || !navigator.wakeLock || wakeRequest || wakeLock) return;
+        wakeRequest = true;
+        try {
+            const lock = await navigator.wakeLock.request('screen');
+            if (!busy || document.visibilityState !== 'visible') await lock.release();
+            else { wakeLock = lock; lock.addEventListener('release', () => { if (wakeLock === lock) wakeLock = null; }); }
+        } catch (_) { /* Ekranı açık tutma desteği olmadığında görünür uyarı geçerlidir. */ }
+        finally { wakeRequest = false; }
+    }
+    function setBusy(value) {
+        busy = value;
+        if (value) { ui.send.hidden = true; ui.later.hidden = true; void keepScreenAwake(); }
+        else if (wakeLock) { const lock = wakeLock; wakeLock = null; void lock.release().catch(() => {}); }
+    }
+    function failure(message) {
+        transition('error'); ui.symbol.innerHTML = arrow;
+        ui.title.textContent = 'Kalan kayıtlarınız telefonda';
+        ui.copy.textContent = message;
+        ui.warning.textContent = 'Onaylanmamış devriyeler telefonunuzda korunur. Tekrar deneyebilir veya sonraki girişinizde kalan kayıtları yükleyebilirsiniz.';
+        ui['warning-box'].hidden = false;
+        ui['progress-label'].textContent = 'Gönderim tamamlanamadı';
+        ui.step.textContent = `${records.length} devriye kaydı gönderilmeyi bekliyor.`;
+        ui.send.textContent = 'Kalan kayıtları tekrar yükle'; ui.send.hidden = false;
+        ui.later.textContent = 'Giriş ekranına dön'; ui.later.hidden = false;
+        ui.foot.textContent = 'Başarıyla iletilen kayıtlar tekrar bekleme listesine alınmaz.';
+    }
+    function friendlyError(error) {
+        const message = String(error?.code || '') + ' ' + String(error?.message || error || '');
+        if (/permission|unauthorized|erişim izni/i.test(message)) return 'Şirkete gönderim yetkisi doğrulanamadı. Aynı devriye hesabıyla tekrar giriş yapın.';
+        if (/AUTH_REQUIRED|oturum|hesap|giriş gerekli/i.test(message)) return 'Devriye hesabınızın oturumu değişti. Aynı hesapla tekrar giriş yaparak kalan kayıtları gönderin.';
+        if (/diğer açık sekme/i.test(message)) return 'Kayıtlarınız diğer açık sekmede yükleniyor. O sekmedeki işlemin tamamlanmasını bekleyin.';
+        if (!navigator.onLine || /İnternet kesildi|network/i.test(message)) return 'İnternet bağlantısı kesildi. Bağlantı geldiğinde kalan kayıtları tekrar yükleyin.';
+        return 'Gönderim tamamlanamadı. İnternet bağlantınızı kontrol ederek kalan kayıtları tekrar yükleyin.';
+    }
+    async function upload() {
+        if (busy) return;
+        if (context.auth.currentUser?.uid !== uid) { failure(friendlyError({ code: 'AUTH_REQUIRED' })); focusPrimary(); return; }
+        if (!navigator.onLine) { failure('İnternet bağlantısı yok. Bağlantı geldiğinde kalan kayıtları yükleyebilirsiniz.'); focusPrimary(); return; }
+        marker('write'); transition('sending'); setBusy(true);
+        ui.title.textContent = 'Devriyeleriniz şirkete iletiliyor';
+        ui.copy.textContent = 'Devriye kayıtlarınız ve varsa fotoğraflarınız gönderiliyor. Şirketin kayıt onayı bekleniyor.';
+        ui.warning.textContent = '“Şirkete iletildi” mesajını görmeden bu ekranı kapatmayın, uygulamadan çıkmayın ve ekranı kilitlemeyin.';
+        ui['warning-box'].hidden = false; ui.progress.hidden = false;
+        ui['progress-label'].textContent = 'Şirkete aktarılıyor';
+        ui.foot.textContent = 'Onaylanmayan kayıtlar telefonunuzda korunur.';
+        progress(0, 'Güvenli gönderim bağlantısı hazırlanıyor…'); ui.card.focus({ preventScroll: true });
+        try {
+            let timer;
+            const storage = await Promise.race([loadUploadStorage(), new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error('Gönderim bağlantısı zaman aşımı')), 20000);
+            })]).finally(() => clearTimeout(timer));
+            if (context.auth.currentUser?.uid !== uid) throw Object.assign(new Error('Oturum değişti'), { code: 'AUTH_REQUIRED' });
+            const completed = await window.KolartOfflineSync.sync({ ...context, ...storage }, { userInitiated: true });
+            const remaining = await window.KolartOfflineSync.queueSummary(context.siteID, uid);
+            if (completed && !remaining.length) {
+                marker('clear'); transition('success'); ui.symbol.innerHTML = tick;
+                ui.title.textContent = 'Şirkete iletildi';
+                ui.copy.textContent = 'Devriye kayıtlarınızın tamamı ve varsa fotoğrafları sisteme kaydedildi. Artık bu ekranı güvenle kapatabilir veya devam edebilirsiniz.';
+                ui['summary-label'].textContent = 'devriye kaydı başarıyla iletildi';
+                ui['warning-box'].hidden = true; ui['progress-label'].textContent = 'Aktarım tamamlandı';
+                progress(100, 'Tüm kayıtlar için şirket onayı alındı.');
+                ui.send.textContent = 'Devam et'; ui.send.hidden = false; ui.later.hidden = true;
+                ui.foot.textContent = 'Bekleyen kayıt kalmadı. Devriyeye devam edebilirsiniz.';
+            } else {
+                renderRecords(remaining);
+                failure(friendlyError(document.getElementById('ks-text')?.textContent || 'Gönderim tamamlanamadı'));
+            }
+        } catch (error) {
+            try { renderRecords(await window.KolartOfflineSync.queueSummary(context.siteID, uid)); } catch (_) {}
+            failure(friendlyError(error));
+            console.warn('[Index devriye aktarımı]', error.code || error.message);
+        } finally {
+            setBusy(false); window.KolartOfflineSync?.hideModal(); focusPrimary();
+        }
+    }
+    ui.send.onclick = () => { if (state === 'success') close(true); else void upload(); };
+    ui.later.onclick = () => { if (!busy) close(state === 'review'); };
+    window.addEventListener('kolart-sync-progress', event => {
+        if (busy) progress(Math.min(99, Number(event.detail?.percent) || 0), event.detail?.step);
+    });
+    window.addEventListener('beforeunload', event => {
+        if (!busy) return;
+        event.preventDefault(); event.returnValue = 'Devriye aktarımı sürüyor. Bu ekranı açık tutun.';
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (!busy) return;
+        if (document.visibilityState === 'visible') void keepScreenAwake();
+        else ui.warning.textContent = 'Gönderimin tamamlanması için bu ekrana geri dönün. “Şirkete iletildi” mesajını görene kadar uygulamayı açık tutun.';
+    });
+    window.addEventListener('offline', () => {
+        if (busy) ui.warning.textContent = 'İnternet kesildi. Bu ekranı açık tutun. Gönderim tamamlanmazsa kalan kayıtlarınız telefonda korunur.';
+    });
+    dialog.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { event.preventDefault(); return; }
+        if (event.key !== 'Tab') return;
+        const buttons = [ui.send, ui.later].filter(el => !el.hidden && !el.disabled);
+        if (!buttons.length) { event.preventDefault(); ui.card.focus(); return; }
+        const first = buttons[0], last = buttons.at(-1);
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === ui.card)) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && (document.activeElement === last || document.activeElement === ui.card)) { event.preventDefault(); first.focus(); }
+    });
+    return {
+        async check(c) {
+            if (pending) return pending;
+            if (!c.auth.currentUser) return false;
+            context = c; uid = c.auth.currentUser.uid;
+            const rows = await window.KolartOfflineSync.queueSummary(c.siteID, uid);
+            if (c.auth.currentUser?.uid !== uid) return false;
+            if (!rows.length) { marker('clear'); return true; }
+            pending = new Promise(resolve => { resolver = resolve; });
+            transition('review'); renderRecords(rows); ui.symbol.innerHTML = arrow;
+            ui.title.textContent = marker('read') ? 'Yarım kalan aktarımınız var' : 'Devriyeleriniz gönderilmeyi bekliyor';
+            ui.copy.textContent = marker('read')
+                ? 'Önceki aktarım tamamlanmamış. Aşağıdaki kayıtların şirkete ulaşması bekleniyor. Kalan devriyeleri şimdi yükleyebilirsiniz.'
+                : 'Aşağıdaki tarihlerde telefonunuza kaydedilmiş devriyeler bulunuyor. Şirket ekranında görünmeleri için bu kayıtları yükleyin.';
+            ui.warning.textContent = 'Gönderim bitene kadar bu ekranı açık tutun. Uygulamayı kapatır veya ekranı kilitlerseniz aktarım yarım kalabilir.';
+            ui['warning-box'].hidden = false; ui.progress.hidden = true;
+            ui.send.textContent = 'Yükle ve devam et'; ui.send.hidden = false;
+            ui.later.textContent = 'Daha sonra'; ui.later.hidden = false;
+            ui.foot.textContent = 'Daha sonra seçerseniz kayıtlar gönderilene kadar şirket ekranında görünmez.';
+            progress(0, 'Gönderim onayınız bekleniyor.'); open();
+            return pending;
+        }
+    };
+})();
+
 async function finishOfflineUploads(app, db, auth, siteID) {
-    const done = await window.KolartOfflineSync.sync(offlineUploadContext(app,db,auth,siteID));
-    return done;
+    return IndexPatrolUpload.check(offlineUploadContext(app, db, auth, siteID));
 }
-// Paket yalnız doğrulanmış güvenlik girişinden sonra hazırlanır.
+
+// Girişte henüz doğrulanmış aynı profil, kısa süre içinde tekrar ağdan okunmaz.
+let verifiedProfile;
+function rememberVerifiedProfile(snapshot, db, username, auth) {
+    verifiedProfile = { snapshot, path: ref(db, 'users/' + username).toString(),
+        uid: auth.currentUser?.uid, checkedAt: Date.now() };
+}
 async function preparePatrolBundle(app, db, auth, siteID, username, type, password) {
     if (type !== 'security') return true;
-    // Önce bekleyen kayıtları onaylat: yeni paket az önce yüklenen saatleri de içerir.
-    if (!await finishOfflineUploads(app, db, auth, siteID)) return false;
-    return !!await window.KolartOffline.start({app,db,auth,siteID,username,password,get,ref,runTransaction});
+    const profile = verifiedProfile;
+    const getForBundle = target => profile && profile.uid === auth.currentUser?.uid &&
+        Date.now() - profile.checkedAt < 5000 && target.toString() === profile.path
+        ? Promise.resolve(profile.snapshot) : get(target);
+    return !!await window.KolartOffline.start({ app, db, auth, siteID, username, password,
+        get: getForBundle, ref, runTransaction });
 }
+
 // --- GÜVENLİK ANAHTARI ---
 const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
 const encryptData = (data) => CryptoJS.AES.encrypt(JSON.stringify(data), CONFIG_KEY).toString();
@@ -830,10 +1111,10 @@ async function forcePasswordChange(username, type, activeDB, auth, reason) {
             sessionStorage.setItem("currentUser", JSON.stringify({username, type}));
             const uploadApp = auth.app;
             const forcedSiteID = localStorage.getItem('siteID');
-            if (!await preparePatrolBundle(uploadApp,activeDB,auth,forcedSiteID,username,type,p1)) {
+            if (!await finishOfflineUploads(uploadApp,activeDB,auth,forcedSiteID)) {
                 this.disabled=false;this.innerText='GÜNCELLE VE GİRİŞ YAP';return;
             }
-            if (!await finishOfflineUploads(uploadApp,activeDB,auth,forcedSiteID)) {
+            if (!await preparePatrolBundle(uploadApp,activeDB,auth,forcedSiteID,username,type,p1)) {
                 this.disabled=false;this.innerText='GÜNCELLE VE GİRİŞ YAP';return;
             }
             
@@ -868,9 +1149,10 @@ function showQRButtons(){
   if(wrapper) wrapper.style.display = "flex"; 
 }
 
-window.addEventListener("load", async ()=>{
+async function initializeSavedSite() {
   if(securityBtn) securityBtn.click();
-  const secStored = JSON.parse(localStorage.getItem("securityUser"));
+  let secStored;
+  try { secStored = JSON.parse(localStorage.getItem("securityUser") || "null"); } catch (_) {}
   if(secStored){ 
     secUsername.value = secStored.username; 
     secPassword.value = unmaskPass(secStored.password);
@@ -884,20 +1166,26 @@ window.addEventListener("load", async ()=>{
       let siteApp = getApps().find(a => a.name === `siteApp-${savedSiteID}`);
       if(!siteApp) siteApp = initializeApp(siteConfig, `siteApp-${savedSiteID}`);
       const siteDB = getDatabase(siteApp);
-      window.KolartOfflineSync.attach(offlineUploadContext(siteApp,siteDB,getAuth(siteApp),savedSiteID));
+      getAuth(siteApp);
+      try {
+        const cachedName = localStorage.getItem('kolart_site_adi|' + savedSiteID);
+        if (cachedName) { siteNameEl.textContent = cachedName; siteNameEl.style.display = 'block'; }
+      } catch (_) {}
       hideQRButtons();
       await loadSiteName(siteDB);
     } else {
       showQRButtons();
     }
   }
-});
+}
+void initializeSavedSite().catch(error => console.warn("Giriş hazırlığı:", error.message));
 
 async function loginUser(rawUsername, password, role) {
     const cleanUsername = rawUsername.trim();
     const cleanPassword = password.trim();
     const dbUsername = cleanUsername.toLocaleUpperCase('tr-TR');
     const loginBtn = document.getElementById("secLoginBtn");
+    if (loginBtn.disabled) return;
     
     const statusModal = document.getElementById("loginStatusModal");
     const statusText = document.getElementById("loginStatusText");
@@ -964,6 +1252,7 @@ try {
    // DESTEK PERSONEL KONTROLÜ (ŞİFRELİ)
         if (dbUsername === "DESTEK PERSONEL") {
             const dSnap = await get(child(ref(activeDB), 'users/' + dbUsername));
+            rememberVerifiedProfile(dSnap, activeDB, dbUsername, auth);
             if (dSnap.exists()) {
                 // ŞİFREYİ BURADA KONTROL EDİYORUZ
                 if (cleanPassword === String(dSnap.val().password).trim()) {
@@ -978,10 +1267,10 @@ try {
                     // ---> BENİ HATIRLA EKLENTİSİ BURADA BİTİYOR <---
 
                     if (statusModal) statusModal.style.display = 'none';
-                    if (!await preparePatrolBundle(app,activeDB,auth,siteId,dbUsername,dSnap.val().type,cleanPassword)) {
+                    if (!await finishOfflineUploads(app,activeDB,auth,siteId)) {
                         loginBtn.disabled=false;loginBtn.style.opacity='1';return;
                     }
-                    if (!await finishOfflineUploads(app,activeDB,auth,siteId)) {
+                    if (!await preparePatrolBundle(app,activeDB,auth,siteId,dbUsername,dSnap.val().type,cleanPassword)) {
                         loginBtn.disabled=false;loginBtn.style.opacity='1';return;
                     }
                     window.location.href = "guvenlik.html"; // Sadece güvenlik sayfasına yönlendiriyor
@@ -999,6 +1288,7 @@ try {
 
         // --- NORMAL KULLANICI KONTROLLERİ ---
         const userSnap = await get(child(ref(activeDB), 'users/' + dbUsername));
+        rememberVerifiedProfile(userSnap, activeDB, dbUsername, auth);
         if (!userSnap.exists()) {
             return showErrorModal("❌ Kullanıcı veritabanında bulunamadı!");
         }
@@ -1018,10 +1308,10 @@ try {
 
         sessionStorage.setItem("currentUser", JSON.stringify({ username: user.username, type: user.type }));
         if (statusModal) statusModal.style.display = 'none';
-        if (!await preparePatrolBundle(app,activeDB,auth,siteId,dbUsername,user.type,cleanPassword)) {
+        if (!await finishOfflineUploads(app,activeDB,auth,siteId)) {
             loginBtn.disabled=false;loginBtn.style.opacity='1';return;
         }
-        if (!await finishOfflineUploads(app,activeDB,auth,siteId)) {
+        if (!await preparePatrolBundle(app,activeDB,auth,siteId,dbUsername,user.type,cleanPassword)) {
             loginBtn.disabled=false;loginBtn.style.opacity='1';return;
         }
 
@@ -1054,33 +1344,55 @@ async function loadSiteName(db){
     const snap = await get(child(ref(db),"settings/siteName"));
     if(snap.exists()){
       const name=snap.val().trim();
-      if(name!==""){ siteNameEl.textContent=name; siteNameEl.style.display="block"; }
+      if(name!==""){
+        siteNameEl.textContent=name; siteNameEl.style.display="block";
+        try { localStorage.setItem("kolart_site_adi|" + localStorage.getItem("siteID"), name); } catch (_) {}
+      }
     }
   }catch(e){ console.error("Site adı yüklenemedi", e); }
 }
 
-qrBtn.addEventListener("click", ()=>{
-  setActive(qrBtn);
-  qrModal.style.display = "flex";
+let qrLibraryPromise, qrLaunchToken = 0;
+function loadQRLibrary() {
+  if (window.Html5Qrcode) return Promise.resolve();
+  if (!qrLibraryPromise) {
+    const load = src => new Promise((resolve, reject) => {
+      const script = document.createElement('script'); script.src = src; script.async = true;
+      const timer = setTimeout(() => { script.remove(); reject(new Error('Kamera dosyası yüklenemedi')); }, 12000);
+      script.onload = () => { clearTimeout(timer); window.Html5Qrcode ? resolve() : reject(new Error('Kamera kütüphanesi bulunamadı')); };
+      script.onerror = () => { clearTimeout(timer); script.remove(); reject(new Error('Kamera dosyası yüklenemedi')); };
+      document.head.appendChild(script);
+    });
+    qrLibraryPromise = load('./vendor/html5-qrcode.min.js').catch(() => load('https://unpkg.com/html5-qrcode'))
+      .catch(error => { qrLibraryPromise = null; throw error; });
+  }
+  return qrLibraryPromise;
+}
+qrBtn.addEventListener("click", async ()=>{
+  const token = ++qrLaunchToken;
+  setActive(qrBtn); qrModal.style.display = "flex";
   const qrDiv = document.getElementById("qr-reader");
-  qrDiv.innerHTML = "";
-  qrReader = new Html5Qrcode("qr-reader");
-  const qrBoxSize = Math.min(window.innerWidth*0.8,300);
-  qrReader.start(
-    { facingMode: "environment" },
-    { fps: 10, qrbox: qrBoxSize },
-    async (qrCodeMessage)=>{
-      try{ await qrReader.stop(); }catch(e){}
-      qrReader=null;
-      qrModal.style.display = "none";
-      await loadSiteConfig(qrCodeMessage);
-      document.getElementById("qrMessage").textContent="İşlem başarılı, şimdi giriş yapabilirsiniz.";
-    },
-    (err)=>{ console.log("QR tarama:",err);}
-  ).catch(err=>{
-    alert("Kamera açılamadı: "+err);
-    qrModal.style.display = "none";
-  });
+  qrDiv.textContent = 'Kamera hazırlanıyor…';
+  try {
+    await loadQRLibrary();
+    if (token !== qrLaunchToken || qrModal.style.display !== 'flex') return;
+    qrDiv.replaceChildren(); qrReader = new Html5Qrcode("qr-reader");
+    const qrBoxSize = Math.min(window.innerWidth*0.8,300);
+    await qrReader.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: qrBoxSize },
+      async (qrCodeMessage)=>{
+        try{ await qrReader.stop(); }catch(e){}
+        qrReader=null; qrModal.style.display = "none";
+        await loadSiteConfig(qrCodeMessage);
+        document.getElementById("qrMessage").textContent="İşlem başarılı, şimdi giriş yapabilirsiniz.";
+      },
+      ()=>{}
+    );
+  } catch(err) {
+    if (token !== qrLaunchToken) return;
+    alert("Kamera açılamadı: "+err); qrModal.style.display = "none";
+  }
 });
 
 codeBtn.addEventListener("click", ()=>{
@@ -1159,6 +1471,7 @@ async function loadSiteConfig(inputCode){
 }
 
 closeQRModal.addEventListener("click", async () => {
+  ++qrLaunchToken;
   if(qrReader){
     try {
       await qrReader.stop();
