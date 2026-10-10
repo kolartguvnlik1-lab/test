@@ -1,12 +1,12 @@
 /* KOLART offline: cihazda kayıt; merkeze gönderim yalnız butona basıldığında. */
-/* kolart-offline-access:4hane-v1 */
+/* kolart-offline-access:4hane-modal-v1 */
 (() => {
 'use strict';
 document.body.appendChild(document.getElementById('offlineLogin'));
 let currentUser, siteID, patrolMeta, patrolId, activeRoute;
 let isPhoneBroken = false, unlocked = false, pointSaving = false;
 let loginEpoch = 0, loginSubmitting = false, previewEpoch = 0;
-let previewPromise = Promise.resolve(), managerPromptID = '';
+let previewPromise = Promise.resolve(), managerPrompt = null;
 const db = {};
 const ref = (_,path) => ({path});
 const get = async reference => {
@@ -48,7 +48,6 @@ async function unlockCandidate(candidate,epoch) {
   document.getElementById('offlinePasswordToggle').setAttribute('aria-pressed','false');
   document.getElementById('offlinePasswordToggle').setAttribute('aria-label','Şifreyi göster');
   document.getElementById('offlineManagerPassword').value='';
-  renderManagerPrompt(candidate);
   document.getElementById('offlineLoginMessage').textContent='';
   return true;
 }
@@ -79,34 +78,105 @@ function stopPosition() {
   if(watchId) {navigator.geolocation.clearWatch(watchId);watchId=null;}
   document.getElementById('securityOverlay').style.display='none';
 }
-function renderManagerPrompt(candidate) {
-  const gate=document.getElementById('offlineManagerGate');
+function finishManagerPrompt(approved) {
+  const prompt=managerPrompt;
+  if(!prompt)return;
+  managerPrompt=null;
   const input=document.getElementById('offlineManagerPassword');
-  const hint=document.getElementById('offlineManagerHint');
-  const identity=candidate
-    ? `${candidate.id}|${candidate.version}|${candidate.managerVerifier?.hash}` : '';
-  const required=!!candidate && window.KolartOffline.requiresManagerPassword(candidate);
-  if(identity!==managerPromptID || !required)input.value='';
-  managerPromptID=identity;
-  gate.hidden=!required;input.required=required;input.disabled=!required;
-  hint.textContent=candidate
-    ? (required
-      ? `${candidate.version} paketi için yönetici onayı gerekli.`
-      : `${candidate.version} · Yönetici onayı tamamlandı.`)
-    : '';
+  document.getElementById('offlineManagerGate').hidden=true;
+  input.value='';input.disabled=true;input.readOnly=false;
+  document.getElementById('offlineManagerForm').onsubmit=null;
+  document.getElementById('offlineManagerCancel').onclick=null;
+  const login=document.getElementById('offlineLogin');
+  login.inert=false;login.removeAttribute('aria-hidden');
+  document.body.classList.remove('manager-gate-open');
+  prompt.resolve(approved);
+  if(!approved && !document.hidden && prompt.epoch===loginEpoch)
+    document.getElementById('offlinePassword').focus({preventScroll:true});
 }
+function requestManagerPassword(candidate,epoch) {
+  if(managerPrompt)finishManagerPrompt(false);
+  const modal=document.getElementById('offlineManagerGate');
+  const input=document.getElementById('offlineManagerPassword');
+  const form=document.getElementById('offlineManagerForm');
+  const button=document.getElementById('offlineManagerSubmit');
+  const cancel=document.getElementById('offlineManagerCancel');
+  const message=document.getElementById('offlineManagerMessage');
+  const buttonText=document.getElementById('offlineManagerSubmitText');
+  const attemptsKey='kolart_offline_yonetici_deneme_'+candidate.id+'|'+candidate.version+'|'+candidate.managerVerifier.hash;
+  input.value='';input.disabled=false;input.readOnly=false;input.removeAttribute('aria-invalid');
+  button.disabled=false;cancel.disabled=false;buttonText.textContent='Kodu doğrula ve devam et';
+  message.textContent='';message.dataset.error='false';message.dataset.success='false';
+  document.getElementById('offlineManagerUser').textContent=candidate.user?.name || candidate.username;
+  return new Promise(resolve=>{
+    const prompt={candidate,epoch,resolve,busy:false};
+    managerPrompt=prompt;
+    cancel.onclick=()=>{if(!prompt.busy)finishManagerPrompt(false);};
+    form.onsubmit=async event=>{
+      event.preventDefault();
+      if(managerPrompt!==prompt || prompt.busy || epoch!==loginEpoch)return;
+      const password=input.value.trim();
+      message.dataset.success='false';message.dataset.error='false';input.removeAttribute('aria-invalid');
+      if(!/^\d{4}$/.test(password)) {
+        message.dataset.error='true';message.textContent='Lütfen denetim sorumlusundan aldığınız 4 haneli kodu giriniz.';
+        input.setAttribute('aria-invalid','true');input.focus({preventScroll:true});return;
+      }
+      prompt.busy=true;button.disabled=true;cancel.disabled=true;input.readOnly=true;
+      buttonText.textContent='Kod doğrulanıyor…';message.textContent='Onay kodunuz cihazda doğrulanıyor…';
+      try {
+        checkAttempts(attemptsKey,'Onay kodu denemesi');
+        const approved=await window.KolartOffline.approveManagerPassword(candidate,password);
+        if(managerPrompt!==prompt || epoch!==loginEpoch)return;
+        if(!approved) {
+          failedAttempt(attemptsKey);
+          throw new Error('Onay kodu hatalı. Denetim sorumlusundan aldığınız kodu kontrol ediniz.');
+        }
+        localStorage.removeItem(attemptsKey);
+        message.dataset.success='true';message.textContent='Kod doğrulandı. Devriye ekranınız açılıyor…';
+        finishManagerPrompt(true);
+      } catch(error) {
+        if(managerPrompt===prompt && epoch===loginEpoch) {
+          message.dataset.error='true';message.textContent=error.message;
+          input.setAttribute('aria-invalid','true');input.focus({preventScroll:true});input.select();
+        }
+      } finally {
+        if(managerPrompt===prompt) {
+          prompt.busy=false;button.disabled=false;cancel.disabled=false;input.readOnly=false;
+          buttonText.textContent='Kodu doğrula ve devam et';
+        }
+      }
+    };
+    modal.hidden=false;
+    document.body.classList.add('manager-gate-open');
+    input.focus({preventScroll:true});
+    const login=document.getElementById('offlineLogin');
+    login.inert=true;login.setAttribute('aria-hidden','true');
+  });
+}
+document.getElementById('offlineManagerGate').addEventListener('keydown',event=>{
+  if(!managerPrompt)return;
+  if(event.key==='Escape') {
+    event.preventDefault();if(!managerPrompt.busy)finishManagerPrompt(false);return;
+  }
+  if(event.key!=='Tab')return;
+  const focusable=Array.from(event.currentTarget.querySelectorAll('button:not(:disabled),input:not(:disabled),a[href]'));
+  const first=focusable[0],last=focusable[focusable.length-1];
+  if(!first)return;
+  if(event.shiftKey && document.activeElement===first){event.preventDefault();last.focus();}
+  else if(!event.shiftKey && document.activeElement===last){event.preventDefault();first.focus();}
+});
 function showLockedLogin() {
   loginEpoch++;previewEpoch++;unlocked=false;
+  finishManagerPrompt(false);
   document.querySelector('.app-container').inert=true;
   document.getElementById('offlineLogin').style.display='grid';
   document.getElementById('offlinePassword').value='';
   document.getElementById('offlineManagerPassword').value='';
   document.getElementById('offlineRemember').checked=!!rememberedPreference();
   const candidate=window.KolartOffline.bundle;
-  renderManagerPrompt(candidate);
   document.getElementById('offlineLoginMessage').textContent=
     candidate && window.KolartOffline.requiresManagerPassword(candidate)
-      ? 'Yöneticinizden 4 haneli şifre alın ve profil şifrenizle giriş yapın.'
+      ? 'Kullanıcı adı ve profil şifrenizle giriş yapın. Ardından denetim kodu istenecektir.'
       : 'Devriyeye devam etmek için profil şifrenizi tekrar girin.';
 }
 function readAttempts(key) {
@@ -168,7 +238,6 @@ async function bootLogin() {
       return;
     }
     document.getElementById('offlineUsername').value=candidate.username;
-    renderManagerPrompt(candidate);
     if(remembered(candidate)) {
       loginSubmitting=true;
       message.textContent='Devriye hesabın açılıyor…';
@@ -178,7 +247,7 @@ async function bootLogin() {
     if(preference)localStorage.removeItem(rememberKey());
     document.getElementById('offlineRemember').checked=false;
     message.textContent=window.KolartOffline.requiresManagerPassword(candidate)
-      ? 'Yönetici kodunu ve kendi profil şifreni gir.'
+      ? 'Profil şifrenle giriş yap. Denetim kodu sonraki adımda istenecek.'
       : 'Profil şifrenle devam edebilirsin.';
   } catch(error) {
     if(epoch===loginEpoch){message.dataset.error='true';message.textContent='Telefon paketi açılamadı: '+error.message;}
@@ -190,7 +259,6 @@ document.getElementById('offlineUsername').addEventListener('input',()=>{
   const username=document.getElementById('offlineUsername').value.trim().toLocaleUpperCase('tr-TR');
   const submit=document.getElementById('offlineLoginBtn'),message=document.getElementById('offlineLoginMessage');
   document.getElementById('offlinePassword').value='';
-  renderManagerPrompt(null);
   submit.disabled=true;
   message.textContent='Kullanıcının telefon paketi kontrol ediliyor…';
   previewPromise=(async()=>{
@@ -200,13 +268,12 @@ document.getElementById('offlineUsername').addEventListener('input',()=>{
       .sort((a,b)=>b.createdAt-a.createdAt)[0];
     const ready=await window.KolartOffline.intact(candidate);
     if(sequence!==previewEpoch || loginSubmitting)return;
-    renderManagerPrompt(ready ? candidate : null);
     document.getElementById('offlineRemember').checked=ready && remembered(candidate);
     submit.disabled=!ready;
     message.textContent=!ready
       ? 'Bu kullanıcı için tamamlanmış cihaz paketi bulunamadı. İnternet varken index’te giriş yapın.'
       : (window.KolartOffline.requiresManagerPassword(candidate)
-        ? 'Yöneticinizden 4 haneli şifre alın ve kendi profil şifrenizi girin.'
+        ? 'Profil şifrenizle giriş yapın. Denetim kodu sonraki adımda istenecektir.'
         : 'Devriye için profil şifrenizi girin.');
   })().catch(error=>{
     if(sequence===previewEpoch && !loginSubmitting)message.textContent=error.message;
@@ -221,7 +288,7 @@ document.getElementById('offlineLoginForm').onsubmit=async event=>{
   if(button.disabled || loginSubmitting)return;
   button.disabled=true;loginSubmitting=true;message.dataset.error='false';
   const epoch=++loginEpoch;
-  const inputs=['offlineUsername','offlinePassword','offlineManagerPassword'].map(id=>document.getElementById(id));
+  const inputs=['offlineUsername','offlinePassword'].map(id=>document.getElementById(id));
   inputs.forEach(input=>input.readOnly=true);
   try {
     await previewPromise;
@@ -232,7 +299,6 @@ document.getElementById('offlineLoginForm').onsubmit=async event=>{
     const candidate=await window.KolartOffline.load(localStorage.getItem('siteID'),username);
     if(epoch!==loginEpoch)return;
     if(!candidate)throw new Error('Bu kullanıcı için tamamlanmış cihaz paketi bulunamadı.');
-    renderManagerPrompt(candidate);
     const attemptsKey='kolart_offline_deneme_'+candidate.id;
     checkAttempts(attemptsKey,'Profil şifresi denemesi');
     message.textContent='Profil şifreniz cihazda doğrulanıyor…';
@@ -244,21 +310,13 @@ document.getElementById('offlineLoginForm').onsubmit=async event=>{
     }
     localStorage.removeItem(attemptsKey);
     if(window.KolartOffline.requiresManagerPassword(candidate)) {
-      const managerPassword=document.getElementById('offlineManagerPassword').value.trim();
-      if(!/^\d{4}$/.test(managerPassword)) {
-        document.getElementById('offlineManagerPassword').focus();
-        throw new Error('Yöneticinizden 4 haneli şifre alın ve bu alana girin.');
-      }
-      const managerAttemptsKey='kolart_offline_yonetici_deneme_'+candidate.id+'|'+candidate.version+'|'+candidate.managerVerifier.hash;
-      checkAttempts(managerAttemptsKey,'Yönetici şifresi denemesi');
-      message.textContent='Yöneticinin 4 haneli şifresi cihazda doğrulanıyor…';
-      const managerOK=await window.KolartOffline.approveManagerPassword(candidate,managerPassword);
+      message.textContent='Profil şifreniz doğrulandı. Denetim kodu onayı bekleniyor…';
+      const approved=await requestManagerPassword(candidate,epoch);
       if(epoch!==loginEpoch)return;
-      if(!managerOK) {
-        failedAttempt(managerAttemptsKey);
-        throw new Error('Yöneticinin 4 haneli şifresi hatalı.');
+      if(!approved) {
+        message.textContent='Kod onayı iptal edildi. Hazır olduğunuzda yeniden giriş yapabilirsiniz.';
+        return;
       }
-      localStorage.removeItem(managerAttemptsKey);
     }
     const rememberEnabled=document.getElementById('offlineRemember').checked;
     await unlockCandidate(candidate,epoch);
@@ -821,7 +879,9 @@ window.addEventListener('pageshow',event=>{if(event.persisted)void bootLogin();}
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden && (unlocked || loginSubmitting)) {
     // Hatırlanan girişte şifre isteme; çalışan nokta okuyucusunu kapat.
-    if(!remembered(window.KolartOffline.bundle) && !isSyncOutboxRunning)showLockedLogin();
+    // Kod modalı açıkken arama ekranına geçip dönmek giriş adımını sıfırlamaz.
+    // Devriye ekranı kod onayına kadar kilitli kalır.
+    if(!managerPrompt && !remembered(window.KolartOffline.bundle) && !isSyncOutboxRunning)showLockedLogin();
     stopPosition();void window.closeScanner();
   } else if(!document.hidden) {
     if(!unlocked && !loginSubmitting)void bootLogin();
