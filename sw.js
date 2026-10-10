@@ -8,7 +8,7 @@ const UI_REVISION = '20261009-elit-1';
 const BASE = new URL('./', self.location.href);
 
 const SHELL =
-  'kolart-offline-shell-v4-' + BUILD + '-' + REVISION + '-' + UI_REVISION;
+  'kolart-offline-shell-v5-' + BUILD + '-' + REVISION + '-' + UI_REVISION;
 
 const MARKER = new URL('__kolart_shell_v4', BASE).href;
 
