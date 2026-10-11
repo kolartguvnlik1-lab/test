@@ -1,56 +1,158 @@
-/* KOLART offline v4 — PWA çevrimdışıyken de index açılır. */
+/* KOLART / CGA — mevcut PWA + çevrimdışı devriye, birleşik SW. */
 'use strict';
 
+// SW değiştiğinde VERSION değerini artırın.
+// Diğer üç değer offline dosyalarla eşleşir.
+const VERSION = 'v125';
 const BUILD = '20261008-2050';
 const REVISION = '20261009-0030';
 const UI_REVISION = '20261009-elit-1';
 
 const BASE = new URL('./', self.location.href);
+const SCOPE = encodeURIComponent(BASE.pathname);
+
+const CACHE_NAME = 'cga-pwa-' + VERSION + '-' + SCOPE;
 
 const SHELL =
-  'kolart-offline-shell-v5-' + BUILD + '-' + REVISION + '-' + UI_REVISION;
+  'kolart-offline-shell-v6-' +
+  VERSION + '-' +
+  BUILD + '-' +
+  REVISION + '-' +
+  UI_REVISION + '-' +
+  SCOPE;
 
 const MARKER = new URL('__kolart_shell_v4', BASE).href;
+const INDEX_URL = new URL('index.html', BASE).href;
 
+// Baştaki / kaldırıldı:
+// Alan adı kökünde ve GitHub /proje/ klasöründe çalışır.
+const CORE_FILES = [
+  'index.html',
+  'ara.html',
+  'bildirimgor.html',
+  'guvenlik.html',
+  'kargog.html',
+  'amir.html',
+  'kayit.html',
+  'cizelge.html',
+  'devriye.html',
+  'gecmis.html',
+  'mesai.html',
+  'nobet.html',
+  'olay.html',
+  'olaylar.html',
+  'takip.html',
+  'tamam.html',
+  'tumkayit.html',
+  'mesajj.html',
+  'egitim.html',
+
+  'manifest.json',
+  'CNAME',
+  'logo.png',
+  'main.js',
+  'nav.js',
+
+  'icon-180.png',
+  'icon-192.png',
+  'icon-512.png',
+
+  'apple-icon.png',
+  'apple-icon-57x57.png',
+  'apple-icon-60x60.png',
+  'apple-icon-72x72.png',
+  'apple-icon-76x76.png',
+  'apple-icon-114x114.png',
+  'apple-icon-120x120.png',
+  'apple-icon-144x144.png',
+  'apple-icon-152x152.png',
+  'apple-icon-180x180.png',
+  'apple-icon-precomposed.png',
+
+  'android-icon-36x36.png',
+  'android-icon-48x48.png',
+  'android-icon-72x72.png',
+  'android-icon-96x96.png',
+  'android-icon-144x144.png',
+  'android-icon-192x192.png',
+
+  'ms-icon-70x70.png',
+  'ms-icon-144x144.png',
+  'ms-icon-150x150.png',
+  'ms-icon-310x310.png',
+
+  'favicon-16x16.png',
+  'favicon-32x32.png',
+  'favicon-96x96.png',
+  'favicon.ico'
+];
+
+// Offline devriye için zorunlu yerel dosyalar.
 const FILES = [
   'index.html',
   'offline-devriye.html',
-  'offline-devriye.js',
   'offline-paket.js',
   'offline-sync.js',
   'vendor/html5-qrcode.min.js'
 ];
 
-const INDEX_FILES = [
+const SHELL_FILES = new Set([
+  ...FILES,
+  'offline-devriye.js'
+]);
+
+const STATIC_EXT =
+  /\.(?:js|mjs|css|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|otf|eot)$/i;
+
+const ENTRY_FILES = new Set([
+  '',
   'index.html',
-  'offline-paket.js',
-  'offline-sync.js'
-];
+  'guvenlik.html',
+  'devriye.html',
+  'offline-index.html'
+]);
 
-const OPTIONAL_FILES = [
-  'logo.png',
-  'manifest.json',
-  'icon-192.png',
-  'icon-512.png'
-];
+let preparing = null;
+let lastProgress = null;
 
-let preparing;
+const progressListeners = new Set();
 
-self.addEventListener('install', e => {
-  e.waitUntil((async () => {
-    // Ekranların tamamı indirilmeden yeni servis etkinleşmez.
-    // Önceki paket önbellekleri ve IndexedDB kayıtları korunur.
-    await prepareShell(() => {}, true);
+function fileURL(file) {
+  return new URL(file, BASE).href;
+}
 
-    await self.skipWaiting();
-  })());
-});
+function relativeFile(url) {
+  return (
+    url.origin === BASE.origin &&
+    url.pathname.startsWith(BASE.pathname)
+  )
+    ? url.pathname.slice(BASE.pathname.length)
+    : null;
+}
 
-self.addEventListener('activate', e => {
-  e.waitUntil(self.clients.claim());
-});
+function liveRequest(url) {
+  // Firebase verisi, Auth, Storage ve uygulama API'leri
+  // tarayıcı önbelleğine alınmaz.
+  return (
+    /(?:^|\.)(?:firebaseio\.com|firebasedatabase\.app)$/.test(
+      url.hostname
+    ) ||
+    /^(?:firestore|firebasestorage|identitytoolkit|securetoken|firebaseinstallations|storage)\.googleapis\.com$/.test(
+      url.hostname
+    ) ||
+    /\/(?:api|token|services)(?:\/|$)/i.test(url.pathname) ||
+    (
+      url.pathname.endsWith('.json') &&
+      !url.pathname.endsWith('/manifest.json')
+    )
+  );
+}
 
-async function fetchTimed(request, milliseconds = 15000) {
+async function fetchTimed(
+  request,
+  milliseconds = 15000,
+  options = {}
+) {
   const controller = new AbortController();
 
   const timer = setTimeout(
@@ -60,6 +162,7 @@ async function fetchTimed(request, milliseconds = 15000) {
 
   try {
     return await fetch(request, {
+      ...options,
       cache: 'no-store',
       signal: controller.signal
     });
@@ -68,19 +171,17 @@ async function fetchTimed(request, milliseconds = 15000) {
   }
 }
 
-async function shellReady() {
-  const cache = await caches.open(SHELL);
-  const marker = await cache.match(MARKER);
-
-  if (!marker) return false;
-
-  for (const file of FILES) {
-    if (!await cache.match(new URL(file, BASE).href)) {
-      return false;
-    }
-  }
-
-  return true;
+function cacheable(response, opaque = false) {
+  return !!response && (
+    (
+      response.ok &&
+      response.type !== 'opaqueredirect'
+    ) ||
+    (
+      opaque &&
+      response.type === 'opaque'
+    )
+  );
 }
 
 async function asset(file) {
@@ -88,214 +189,558 @@ async function asset(file) {
 
   try {
     response = await fetchTimed(
-      new URL(file, BASE).href,
+      fileURL(file),
       25000
     );
   } catch (_) {
     throw new Error(
       file +
-      ' indirilemedi. Bağlantıyı ve dosyanın sunucuda bulunduğunu kontrol edin.'
+      ' indirilemedi. Bağlantıyı ve dosya yolunu kontrol edin.'
     );
   }
 
   if (!response.ok) {
     throw new Error(
-      file + ' indirilemedi (HTTP ' + response.status + ').'
+      file +
+      ' indirilemedi (HTTP ' +
+      response.status +
+      ').'
     );
   }
 
-  const type = response.headers.get('Content-Type') || '';
+  const type =
+    response.headers.get('Content-Type') || '';
 
   if (
-    file.endsWith('.js') &&
+    /\.(?:js|mjs)$/i.test(file) &&
     !/javascript|ecmascript|text\/plain/i.test(type)
   ) {
     throw new Error(
-      file + ' yerine JavaScript olmayan bir dosya döndü.'
+      file +
+      ' yerine JavaScript olmayan bir dosya döndü.'
     );
   }
+
+  const text = /\.(?:html|js)$/i.test(file)
+    ? await response.clone().text()
+    : '';
 
   if (
     file === 'offline-devriye.html' &&
-    !(await response.clone().text()).includes(
-      'kolart-build:' + BUILD
-    )
+    !text.includes('kolart-build:' + BUILD)
   ) {
     throw new Error(
-      'offline-devriye.html uyumlu sürüm değil. Mevcut devriye dosyalarını kontrol edin.'
+      'offline-devriye.html uyumlu BUILD sürümünde değil.'
     );
   }
 
   if (
-    ['offline-devriye.html', 'offline-devriye.js'].includes(file) &&
-    !(await response.clone().text()).includes('kolart-offline-access:4hane-v1')
+    [
+      'offline-devriye.html',
+      'offline-devriye.js'
+    ].includes(file) &&
+    !text.includes('kolart-offline-access:4hane-v1')
   ) {
     throw new Error(
-      file + ' yönetici parolası sürümü değil. Güncellenen dosyaları birlikte yükleyin.'
+      file +
+      ' dört haneli yönetici kodunu destekleyen sürümde değil.'
     );
   }
 
   if (
     file === 'index.html' &&
-    !(await response.clone().text()).includes(
-      'id="offlineModeBtn"'
-    )
+    !/\bid\s*=\s*(?:["']offlineModeBtn["']|offlineModeBtn(?=[\s>]))/.test(text)
   ) {
     throw new Error(
-      'index.html eski sürüm. Güncellenen dosyaları birlikte yükleyin.'
+      'index.html içinde offlineModeBtn bulunamadı. ' +
+      'Offline özellikli index dosyasını yükleyin.'
     );
   }
 
   if (
     file === 'offline-paket.js' &&
-    !(await response.clone().text()).includes(
-      "const REVISION = '" + REVISION + "'"
-    )
+    !new RegExp(
+      '\\bconst\\s+REVISION\\s*=\\s*(["\'])' +
+      REVISION +
+      '\\1'
+    ).test(text)
   ) {
     throw new Error(
-      'offline-paket.js eski sürüm. Güncellenen dosyaları birlikte yükleyin.'
+      'offline-paket.js REVISION değeri SW ile eşleşmiyor.'
     );
   }
 
   return response;
 }
 
-async function prepareIndex() {
-  const cache = await caches.open(SHELL);
+function linkedAssets(html, pageURL) {
+  const assets = new Set();
 
-  const results = await Promise.allSettled(
-    INDEX_FILES.map(async file => [
-      file,
-      await asset(file)
-    ])
+  const cleanHTML = html.replace(
+    /<!--[\s\S]*?-->/g,
+    ''
   );
 
-  const failure = results.find(
-    r => r.status === 'rejected'
-  );
+  for (
+    const match of cleanHTML.matchAll(
+      /<(script|link)\b[^>]*>/gi
+    )
+  ) {
+    const tag = match[0];
 
-  if (failure) throw failure.reason;
-
-  for (const { value: [file, response] } of results) {
-    await cache.put(
-      new URL(file, BASE).href,
-      response
+    const rel = tag.match(
+      /\brel\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i
     );
-  }
 
-  await optionalAssets(cache);
-}
+    const relValue =
+      rel && (rel[1] ?? rel[2] ?? rel[3]) || '';
 
-async function optionalAssets(cache) {
-  await Promise.allSettled(
-    OPTIONAL_FILES.map(async file => {
-      if (await cache.match(new URL(file, BASE).href)) return;
+    if (
+      match[1].toLowerCase() === 'link' &&
+      !/\b(?:stylesheet|modulepreload)\b/i.test(relValue)
+    ) {
+      continue;
+    }
 
-      const response = await fetchTimed(
-        new URL(file, BASE).href,
-        5000
+    const path = tag.match(
+      /\b(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i
+    );
+
+    if (!path) continue;
+
+    try {
+      const pathValue =
+        path[1] ?? path[2] ?? path[3];
+
+      const url = new URL(
+        pathValue.replace(/&amp;/g, '&'),
+        pageURL
       );
 
-      if (response.ok) {
-        await cache.put(
-          new URL(file, BASE).href,
-          response
-        );
+      if (
+        /^https?:$/.test(url.protocol) &&
+        STATIC_EXT.test(url.pathname) &&
+        !liveRequest(url) &&
+        url.href !== self.location.href
+      ) {
+        assets.add(url.href);
       }
-    })
-  );
+    } catch (_) {
+      // Geçersiz bağlantı önbelleğe eklenmez.
+    }
+  }
+
+  return [...assets];
 }
 
-async function prepareShell(progress, refresh = false) {
+async function shellManifest() {
   const cache = await caches.open(SHELL);
+  const hit = await cache.match(MARKER);
 
+  if (!hit) return null;
+
+  try {
+    const data = await hit.json();
+
+    return (
+      data.build === BUILD &&
+      data.revision === REVISION &&
+      typeof data.cacheName === 'string' &&
+      data.cacheName.startsWith(SHELL + '-data-') &&
+      Array.isArray(data.files) &&
+      FILES.every(file => data.files.includes(file))
+    )
+      ? data
+      : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function shellReady() {
+  const data = await shellManifest();
+
+  if (
+    !data ||
+    !(await caches.keys()).includes(data.cacheName)
+  ) {
+    return false;
+  }
+
+  const cache = await caches.open(data.cacheName);
+
+  for (const file of data.files) {
+    if (!await cache.match(fileURL(file))) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function progress(data) {
+  lastProgress = data;
+
+  for (const listener of progressListeners) {
+    try {
+      listener(data);
+    } catch (_) {
+      // Kapanan sekme indirmeyi durdurmaz.
+    }
+  }
+}
+
+async function buildShell(refresh) {
   if (!refresh && await shellReady()) {
-    return {
+    return shellManifest();
+  }
+
+  progress({
+    file: 'offline-devriye.html',
+    done: 0,
+    total: FILES.length
+  });
+
+  const offlineHTML = await asset(
+    'offline-devriye.html'
+  );
+
+  const html = await offlineHTML.clone().text();
+
+  // Kod HTML'e gömülüyse offline-devriye.js aranmaz.
+  // Dışarıdan çağrılıyorsa zorunlu dosya olarak indirilir.
+  const localScripts = linkedAssets(
+    html,
+    fileURL('offline-devriye.html')
+  )
+    .map(href => relativeFile(new URL(href)))
+    .filter(file => file !== null);
+
+  const files = [
+    ...new Set([
+      ...FILES,
+      ...localScripts
+    ])
+  ];
+
+  let done = 1;
+
+  progress({
+    file: 'offline-devriye.html',
+    done,
+    total: files.length
+  });
+
+  const results = await Promise.allSettled(
+    files
+      .filter(file => file !== 'offline-devriye.html')
+      .map(async file => {
+        const response = await asset(file);
+
+        progress({
+          file,
+          done: ++done,
+          total: files.length
+        });
+
+        return [file, response];
+      })
+  );
+
+  const failed = results.find(
+    result => result.status === 'rejected'
+  );
+
+  if (failed) throw failed.reason;
+
+  // Ayrı kopyaya yazılır.
+  // İndirme/yazma başarısızsa önceki hazır paket değişmez.
+  const cacheName =
+    SHELL +
+    '-data-' +
+    Date.now().toString(36) +
+    '-' +
+    Math.random().toString(36).slice(2, 10);
+
+  try {
+    const cache = await caches.open(cacheName);
+
+    await cache.put(
+      fileURL('offline-devriye.html'),
+      offlineHTML
+    );
+
+    for (const result of results) {
+      await cache.put(
+        fileURL(result.value[0]),
+        result.value[1]
+      );
+    }
+
+    const data = {
       build: BUILD,
       revision: REVISION,
-      cacheName: SHELL,
-      files: FILES
+      uiRevision: UI_REVISION,
+      cacheName,
+      files
     };
-  }
 
-  // HTML ve tarayıcı dosyaları aynı sürüm tamamlanmadan hazır sayılmaz.
-  const results = await Promise.allSettled(
-    FILES.map(async (file, index) => {
-      progress({
-        file,
-        done: index,
-        total: FILES.length
-      });
+    const metadataCache = await caches.open(SHELL);
 
-      return [
-        file,
-        await asset(file)
-      ];
-    })
-  );
-
-  const failure = results.find(
-    r => r.status === 'rejected'
-  );
-
-  if (failure) throw failure.reason;
-
-  // İndirme başarısızsa önceki dosyalar yerinde kalır.
-  await cache.delete(MARKER);
-
-  for (const { value: [file, response] } of results) {
-    await cache.put(
-      new URL(file, BASE).href,
-      response
+    await metadataCache.put(
+      MARKER,
+      new Response(
+        JSON.stringify(data),
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      )
     );
+
+    return data;
+  } catch (error) {
+    await caches.delete(cacheName).catch(() => {});
+    throw error;
+  }
+}
+
+function prepareShell(
+  listener = () => {},
+  refresh = false
+) {
+  progressListeners.add(listener);
+
+  if (!preparing) {
+    lastProgress = null;
+
+    preparing = buildShell(refresh).finally(() => {
+      preparing = null;
+      lastProgress = null;
+    });
+  } else if (lastProgress) {
+    try {
+      listener(lastProgress);
+    } catch (_) {
+      // İlerleme bildirimi isteğe bağlıdır.
+    }
   }
 
-  await optionalAssets(cache);
+  return preparing.finally(() => {
+    progressListeners.delete(listener);
+  });
+}
 
-  await cache.put(
-    MARKER,
-    new Response(
-      JSON.stringify({
-        build: BUILD,
-        files: FILES
-      }),
+async function pool(
+  items,
+  worker,
+  concurrency = 6
+) {
+  let next = 0;
+
+  await Promise.all(
+    Array.from(
       {
-        headers: {
-          'Content-Type': 'application/json'
+        length: Math.min(
+          concurrency,
+          items.length
+        )
+      },
+      async () => {
+        while (next < items.length) {
+          const item = items[next++];
+          await worker(item);
         }
       }
     )
   );
-
-  return {
-    build: BUILD,
-    revision: REVISION,
-    cacheName: SHELL,
-    files: FILES
-  };
 }
 
-self.addEventListener('message', e => {
-  const message = e.data;
+async function prepareCore(shell) {
+  const cache = await caches.open(CACHE_NAME);
+  const ready = await caches.open(shell.cacheName);
+
+  const index = await ready.match(INDEX_URL);
+
+  await cache.put(
+    INDEX_URL,
+    index.clone()
+  );
+
+  await cache.put(
+    BASE.href,
+    index.clone()
+  );
+
+  const dependencies = new Set(
+    linkedAssets(
+      await index.text(),
+      INDEX_URL
+    )
+  );
+
+  // Eksik CNAME/ikon/sayfa normal PWA'nın ve
+  // tamamlanan offline paketin kurulumunu bozmaz.
+  await pool(
+    CORE_FILES.filter(file => file !== 'index.html'),
+    async file => {
+      try {
+        const response = await fetchTimed(
+          fileURL(file),
+          8000
+        );
+
+        if (!cacheable(response)) return;
+
+        if (
+          file.endsWith('.js') &&
+          /text\/html/i.test(
+            response.headers.get('Content-Type') || ''
+          )
+        ) {
+          return;
+        }
+
+        if (file.endsWith('.html')) {
+          const html = await response.clone().text();
+
+          for (
+            const href of linkedAssets(
+              html,
+              fileURL(file)
+            )
+          ) {
+            dependencies.add(href);
+          }
+        }
+
+        await cache.put(
+          fileURL(file),
+          response
+        );
+      } catch (_) {
+        // Dosya varsa daha sonraki ziyaretinde de
+        // önbelleğe alınır.
+      }
+    }
+  );
+
+  await pool(
+    [...dependencies],
+    async href => {
+      try {
+        if (await cache.match(href)) return;
+
+        const external =
+          new URL(href).origin !== BASE.origin;
+
+        let response;
+
+        try {
+          response = await fetchTimed(
+            href,
+            8000,
+            {
+              mode: 'cors',
+              credentials: external
+                ? 'omit'
+                : 'same-origin'
+            }
+          );
+        } catch (error) {
+          if (!external) throw error;
+
+          response = await fetchTimed(
+            href,
+            5000,
+            {
+              mode: 'no-cors',
+              credentials: 'omit'
+            }
+          );
+        }
+
+        if (cacheable(response, external)) {
+          await cache.put(
+            href,
+            response
+          );
+        }
+      } catch (_) {
+        // CDN'nin erişilememesi yerel offline paketi bozmaz.
+      }
+    }
+  );
+}
+
+self.addEventListener('install', event => {
+  event.waitUntil((async () => {
+    const shell = await prepareShell(
+      () => {},
+      true
+    );
+
+    await prepareCore(shell);
+
+    await self.skipWaiting();
+  })());
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+
+    const old = keys.filter(key => (
+      key !== CACHE_NAME &&
+      /^cga-pwa-v\d+-/.test(key) &&
+      key.endsWith('-' + SCOPE)
+    ));
+
+    // Bir önceki arayüz kopyası yedek kalır.
+    // Legacy, offline ve başka uygulama cache'leri korunur.
+    const previous = old.sort((a, b) => (
+      Number(b.match(/cga-pwa-v(\d+)/)[1]) -
+      Number(a.match(/cga-pwa-v(\d+)/)[1])
+    ));
+
+    for (const key of previous.slice(1)) {
+      await caches.delete(key);
+    }
+
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener('message', event => {
+  const message = event.data;
 
   if (
     !message ||
     ![
       'KOLART_SHELL_PREPARE',
-      'KOLART_SHELL_STATUS'
+      'KOLART_SHELL_STATUS',
+      'SKIP_WAITING'
     ].includes(message.type)
   ) {
     return;
   }
 
-  const port = e.ports[0];
+  const port = event.ports && event.ports[0];
 
   const reply = data => {
-    if (port) port.postMessage(data);
+    try {
+      if (port) port.postMessage(data);
+    } catch (_) {}
   };
 
-  const work = (async () => {
+  event.waitUntil((async () => {
     try {
+      if (message.type === 'SKIP_WAITING') {
+        await self.skipWaiting();
+        return;
+      }
+
       if (message.type === 'KOLART_SHELL_STATUS') {
         reply({
           ok: true,
@@ -307,18 +752,12 @@ self.addEventListener('message', e => {
         return;
       }
 
-      await self.clients.claim();
-
-      if (!preparing) {
-        preparing = prepareShell(
-          p => reply({ progress: p }),
-          message.refresh === true
-        ).finally(() => {
-          preparing = null;
-        });
-      }
-
-      const shell = await preparing;
+      const shell = await prepareShell(
+        data => reply({
+          progress: data
+        }),
+        message.refresh === true
+      );
 
       reply({
         ok: true,
@@ -329,141 +768,330 @@ self.addEventListener('message', e => {
         ok: false,
         build: BUILD,
         revision: REVISION,
-        message: error.message
+        message: error.message || String(error)
       });
     }
-  })();
-
-  e.waitUntil(work);
+  })());
 });
+
+async function cachedPage(url) {
+  const href = url.origin + url.pathname;
+
+  const current = await (
+    await caches.open(CACHE_NAME)
+  ).match(href);
+
+  if (current) return current;
+
+  const shell = await shellManifest();
+
+  if (shell) {
+    const hit = await (
+      await caches.open(shell.cacheName)
+    ).match(href);
+
+    if (hit) return hit;
+  }
+
+  const keys = await caches.keys();
+
+  const old = keys
+    .filter(key => (
+      key !== CACHE_NAME &&
+      (
+        /^cga-pwa-v\d+$/.test(key) ||
+        (
+          /^cga-pwa-v\d+-/.test(key) &&
+          key.endsWith('-' + SCOPE)
+        )
+      )
+    ))
+    .sort((a, b) => (
+      Number(b.match(/cga-pwa-v(\d+)/)[1]) -
+      Number(a.match(/cga-pwa-v(\d+)/)[1])
+    ));
+
+  for (const key of old) {
+    const hit = await (
+      await caches.open(key)
+    ).match(href, {
+      ignoreSearch: true
+    });
+
+    if (hit) return hit;
+  }
+
+  return null;
+}
 
 function unavailable() {
   return new Response(
-    '<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#080808;color:#fff;font:16px Arial;padding:40px 24px;text-align:center"><h2>Çevrimdışı hazırlık gerekli</h2><p>İnternet varken giriş yapıp “Çevrimdışı paket hazır” mesajını bekleyin.</p><a href="index.html" style="color:#ccff00">Giriş ekranına dön</a></body></html>',
+    '<!doctype html>' +
+    '<html lang="tr">' +
+    '<meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>KOLART</title>' +
+    '<body style="background:#080808;color:#fff;font:16px Arial;padding:40px 24px;text-align:center">' +
+    '<h2>Bu ekran henüz cihaza kaydedilmedi</h2>' +
+    '<p>İnternet varken uygulamayı açıp çevrimdışı hazırlığın tamamlanmasını bekleyin.</p>' +
+    '<a href="' + INDEX_URL + '" style="color:#ccff00">Giriş ekranına dön</a>' +
+    '</body></html>',
     {
       status: 503,
       headers: {
-        'Content-Type': 'text/html; charset=utf-8'
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store'
       }
     }
   );
 }
 
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+async function navigation(
+  request,
+  url,
+  relative
+) {
+  if (relative === 'offline-devriye.html') {
+    const shell = await shellManifest();
 
-  const url = new URL(e.request.url);
-
-  if (
-    url.origin !== BASE.origin ||
-    !url.pathname.startsWith(BASE.pathname)
-  ) {
-    return;
-  }
-
-  const relative = url.pathname.slice(BASE.pathname.length);
-
-  // GET dışındaki Firebase/Storage/Auth isteklerine müdahale edilmez.
-  if (e.request.mode === 'navigate') {
-    e.respondWith((async () => {
-      const cache = await caches.open(SHELL);
-
-      const offlineURL = new URL(
-        'offline-devriye.html',
-        BASE
-      ).href;
-
-      const indexURL = new URL(
-        'index.html',
-        BASE
-      ).href;
-
-      if (relative === 'offline-devriye.html') {
-        const hit = await cache.match(offlineURL);
-
-        if (hit) return hit;
-
-        try {
-          return await fetchTimed(e.request, 5000);
-        } catch (_) {
-          return unavailable();
-        }
-      }
-
-      // PWA start_url index, klasör adresi veya normal devriye ekranı olabilir.
-      const entry = [
-        '',
-        'index.html',
-        'guvenlik.html',
-        'devriye.html',
-        'offline-index.html'
-      ].includes(relative);
-
-      const indexEntry = [
-        '',
-        'index.html'
-      ].includes(relative);
-
-      try {
-        const response = await fetchTimed(
-          e.request,
-          5000
-        );
-
-        if (!response.ok && entry) {
-          throw new Error(
-            'Giriş ekranı sunucudan alınamadı.'
-          );
-        }
-
-        if (indexEntry && response.ok) {
-          await cache.put(
-            indexURL,
-            response.clone()
-          ).catch(() => {});
-        }
-
-        return response;
-      } catch (_) {
-        const hit = await cache.match(
-          entry ? indexURL : url.href,
-          {
-            ignoreSearch: true
-          }
-        );
-
-        return hit || (entry ? Response.error() : unavailable());
-      }
-    })());
-
-    return;
-  }
-
-  if (
-    !FILES.includes(relative) &&
-    !OPTIONAL_FILES.includes(relative)
-  ) {
-    return;
-  }
-
-  e.respondWith((async () => {
-    const hit = await (
-      await caches.open(SHELL)
-    ).match(new URL(relative, BASE).href);
+    const hit = shell && await (
+      await caches.open(shell.cacheName)
+    ).match(fileURL(relative));
 
     if (hit) return hit;
 
-    const response = await fetch(e.request);
+    try {
+      return await fetchTimed(
+        request,
+        4000
+      );
+    } catch (_) {
+      return unavailable();
+    }
+  }
 
-    if (response.ok) {
+  try {
+    const response = await fetchTimed(
+      request,
+      4000
+    );
+
+    if (
+      !response.ok &&
+      (
+        ENTRY_FILES.has(relative) ||
+        CORE_FILES.includes(relative)
+      )
+    ) {
+      throw new Error('Ekran alınamadı.');
+    }
+
+    if (
+      response.ok &&
+      (
+        CORE_FILES.includes(relative) ||
+        relative === ''
+      )
+    ) {
+      const key = (
+        relative === '' ||
+        relative === 'index.html'
+      )
+        ? INDEX_URL
+        : url.origin + url.pathname;
+
       await (
-        await caches.open(SHELL)
+        await caches.open(CACHE_NAME)
       ).put(
-        new URL(relative, BASE).href,
+        key,
         response.clone()
       ).catch(() => {});
     }
 
     return response;
-  })());
+  } catch (_) {
+    const hit = await cachedPage(
+      relative === ''
+        ? new URL(INDEX_URL)
+        : url
+    );
+
+    // Yalnızca istenen ekran yoksa giriş ekranını getirir.
+    // Offline devriyeye yönlendirme yapmaz.
+    return (
+      hit ||
+      (
+        ENTRY_FILES.has(relative) &&
+        await cachedPage(new URL(INDEX_URL))
+      ) ||
+      unavailable()
+    );
+  }
+}
+
+async function staticAsset(
+  request,
+  url,
+  relative
+) {
+  const shell = await shellManifest();
+
+  if (
+    shell &&
+    (
+      SHELL_FILES.has(relative) ||
+      shell.files.includes(relative)
+    )
+  ) {
+    const hit = await (
+      await caches.open(shell.cacheName)
+    ).match(fileURL(relative));
+
+    if (hit) return hit;
+  }
+
+  const cache = await caches.open(CACHE_NAME);
+
+  const key = (
+    relative !== null &&
+    CORE_FILES.includes(relative)
+  )
+    ? fileURL(relative)
+    : request;
+
+  const hit = await cache.match(key);
+
+  if (hit) return hit;
+
+  try {
+    const response = await fetchTimed(
+      request,
+      10000
+    );
+
+    const external =
+      url.origin !== BASE.origin;
+
+    const htmlForScript = (
+      /\.(?:js|mjs|css)$/i.test(url.pathname) &&
+      /text\/html/i.test(
+        response.headers.get('Content-Type') || ''
+      )
+    );
+
+    if (
+      cacheable(response, external) &&
+      !htmlForScript
+    ) {
+      await cache.put(
+        key,
+        response.clone()
+      ).catch(() => {});
+    }
+
+    return response;
+  } catch (_) {
+    const keys = await caches.keys();
+
+    const previousNames = keys
+      .filter(name => (
+        /^cga-pwa-v\d+$/.test(name) ||
+        (
+          /^cga-pwa-v\d+-/.test(name) &&
+          name.endsWith('-' + SCOPE)
+        )
+      ))
+      .reverse();
+
+    for (const name of previousNames) {
+      const previous = await (
+        await caches.open(name)
+      ).match(key);
+
+      if (previous) return previous;
+    }
+
+    return Response.error();
+  }
+}
+
+self.addEventListener('fetch', event => {
+  if (
+    event.request.method !== 'GET' ||
+    event.request.headers.has('range')
+  ) {
+    return;
+  }
+
+  const url = new URL(event.request.url);
+
+  if (
+    !/^https?:$/.test(url.protocol) ||
+    liveRequest(url)
+  ) {
+    return;
+  }
+
+  const relative = relativeFile(url);
+
+  // SW dosyasının güncelleme kontrolü
+  // daima tarayıcı/ağ üzerinden ilerler.
+  if (
+    url.href === self.location.href ||
+    relative === 'sw.js'
+  ) {
+    return;
+  }
+
+  if (event.request.mode === 'navigate') {
+    if (relative !== null) {
+      event.respondWith(
+        navigation(
+          event.request,
+          url,
+          relative
+        )
+      );
+    }
+
+    return;
+  }
+
+  if (
+    url.origin === BASE.origin &&
+    relative === null
+  ) {
+    return;
+  }
+
+  const staticFile = (
+    relative !== null &&
+    (
+      CORE_FILES.includes(relative) ||
+      SHELL_FILES.has(relative)
+    )
+  ) || (
+    STATIC_EXT.test(url.pathname) &&
+    (
+      relative !== null ||
+      [
+        'script',
+        'style',
+        'image',
+        'font'
+      ].includes(event.request.destination)
+    )
+  );
+
+  if (staticFile) {
+    event.respondWith(
+      staticAsset(
+        event.request,
+        url,
+        relative
+      )
+    );
+  }
+
+  // Diğer canlı GET istekleri normal ağ akışında bırakılır.
 });
