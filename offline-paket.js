@@ -56,6 +56,54 @@
     }
   }
 
+  function activatedWorker(reg) {
+    return new Promise((resolve, reject) => {
+      const watched = new Set();
+      const notified = new Set();
+      let finished = false;
+      const timer = setTimeout(() => finish(new Error(
+        'Çevrimdışı servis kurulumu tamamlanmadı. Bağlantıyı kontrol edip tekrar deneyin.'
+      )), 120000);
+
+      function finish(error, target) {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        reg.removeEventListener('updatefound', check);
+        for (const target of watched) target.removeEventListener('statechange', check);
+        if (error) reject(error);
+        else resolve(target);
+      }
+
+      function check() {
+        if (finished) return;
+        for (const target of [reg.installing, reg.waiting, reg.active]) {
+          if (target && !watched.has(target)) {
+            watched.add(target);
+            target.addEventListener('statechange', check);
+          }
+        }
+        const target = reg.installing || reg.waiting || reg.active;
+        if (!target || target.state === 'redundant') {
+          finish(new Error('sw.js kurulumu tamamlanamadı. Dosya yolunu ve sunucudaki SW kodunu kontrol edin.'));
+          return;
+        }
+        if (target.state === 'activated') {
+          finish(null, target);
+          return;
+        }
+        if (target === reg.waiting && target.state === 'installed' && !notified.has(target)) {
+          notified.add(target);
+          try { target.postMessage({ type: 'SKIP_WAITING' }); }
+          catch (error) { finish(error); }
+        }
+      }
+
+      reg.addEventListener('updatefound', check);
+      check();
+    });
+  }
+
   async function worker() {
     if (
       !('serviceWorker' in navigator) ||
@@ -67,88 +115,49 @@
       );
     }
 
-    if (!registration) {
-      registration = navigator.serviceWorker.register(
-        new URL('sw.js', base),
-        {
-          scope: base.pathname,
-          updateViaCache: 'none'
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (!registration) {
+          // register() zaten sürüm kontrolü yapar. Boş bir kayıtta update() çağrılmaz.
+          registration = navigator.serviceWorker.register(
+            new URL('sw.js', base),
+            { scope: base.pathname, updateViaCache: 'none' }
+          );
         }
-      ).catch(e => {
-        registration = null;
-        throw e;
-      });
+        const reg = await within(registration, 20000, 'Çevrimdışı servis kaydedilemedi.');
+        if (!reg.installing && !reg.waiting && !reg.active) {
+          // Başarısız kurulumdan kalan kayıt yeniden alınır; cihaz verileri silinmez.
+          registration = null;
+          continue;
+        }
+        return await activatedWorker(reg);
+      }
+      throw new Error('Çevrimdışı servis kaydı boş. sw.js dosyasını kontrol edip tekrar deneyin.');
+    } catch (error) {
+      registration = null;
+      throw error;
     }
-
-    const reg = await within(
-      registration,
-      20000,
-      'Çevrimdışı servis kaydedilemedi.'
-    );
-
-    await within(
-      reg.update(),
-      20000,
-      'Çevrimdışı servis güncellenemedi.'
-    );
-
-    const candidate = reg.installing || reg.waiting;
-
-    if (candidate && candidate.state !== 'activated') {
-      await within(
-        new Promise((resolve, reject) => {
-          const check = () => {
-            if (candidate.state === 'activated') {
-              candidate.removeEventListener('statechange', check);
-              resolve();
-            }
-
-            if (candidate.state === 'redundant') {
-              candidate.removeEventListener('statechange', check);
-              reject(new Error('sw.js etkinleştirilemedi.'));
-            }
-          };
-
-          candidate.addEventListener('statechange', check);
-          check();
-        }),
-        25000,
-        'Çevrimdışı servis etkinleşmedi.'
-      );
-    }
-
-    const active = reg.active;
-
-    if (!active) {
-      throw new Error('Çevrimdışı servis henüz hazır değil.');
-    }
-
-    return active;
   }
 
   async function controlled() {
     if (!navigator.serviceWorker.controller) {
-      await within(
-        new Promise(resolve => {
-          const onChange = () => {
-            navigator.serviceWorker.removeEventListener(
-              'controllerchange',
-              onChange
-            );
-
-            resolve();
-          };
-
-          navigator.serviceWorker.addEventListener(
-            'controllerchange',
-            onChange
-          );
-
-          if (navigator.serviceWorker.controller) onChange();
-        }),
-        10000,
-        'Çevrimdışı servis bu sayfayı kontrol etmiyor. Sayfayı yenileyip giriş yapın.'
-      );
+      await new Promise((resolve, reject) => {
+        const cleanup = () => {
+          clearTimeout(timer);
+          navigator.serviceWorker.removeEventListener('controllerchange', onChange);
+        };
+        const onChange = () => {
+          if (!navigator.serviceWorker.controller) return;
+          cleanup();
+          resolve();
+        };
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error('Çevrimdışı servis bu sayfayı kontrol etmiyor. Sayfayı yenileyip giriş yapın.'));
+        }, 10000);
+        navigator.serviceWorker.addEventListener('controllerchange', onChange);
+        onChange();
+      });
     }
   }
 
@@ -161,12 +170,14 @@
         new Promise((resolve, reject) => {
           channel.port1.onmessage = e => {
             const m = e.data;
+            if (!m || typeof m !== 'object') return;
 
             if (m.progress) {
-              progress(
-                60,
-                'Sayfa ve QR kamera dosyaları telefona indiriliyor…'
-              );
+              const total = Number(m.progress.total);
+              const done = Number(m.progress.done);
+              const percent = total > 0 && Number.isFinite(done)
+                ? 55 + Math.round(25 * Math.max(0, Math.min(1, done / total))) : 60;
+              progress(percent, 'Sayfa ve QR kamera dosyaları telefona indiriliyor…');
 
               return;
             }
