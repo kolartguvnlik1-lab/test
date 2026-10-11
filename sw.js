@@ -3,7 +3,7 @@
 
 // SW değiştiğinde VERSION değerini artırın.
 // Diğer üç değer offline dosyalarla eşleşir.
-const VERSION = 'v127';
+const VERSION = 'v128';
 const BUILD = '20261008-2050';
 const REVISION = '20261009-0030';
 const UI_REVISION = '20261009-elit-1';
